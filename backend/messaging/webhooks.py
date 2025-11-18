@@ -16,7 +16,11 @@ class InboundWebhookView(APIView):
         payload = request.data if isinstance(request.data, dict) else {}
 
         contact = self._match_contact(payload)
+        org = contact.organization if contact else None
+        if not org:
+            return Response({"status": "ignored", "reason": "no_matching_org"}, status=202)
         inbound = InboundMessage.objects.create(
+            organization=org,
             contact=contact,
             channel=channel,
             payload=payload,

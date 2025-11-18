@@ -6,6 +6,7 @@ from rest_framework.response import Response
 
 from .models import Contact
 from .serializers import ContactSerializer, IdentityConflictSerializer
+from organizations.utils import get_current_org
 
 
 class ContactViewSet(viewsets.ModelViewSet):
@@ -35,3 +36,11 @@ class ContactViewSet(viewsets.ModelViewSet):
         context = super().get_serializer_context()
         context["action"] = getattr(self, "action", None)
         return context
+
+    def get_queryset(self):
+        org = get_current_org(self.request)
+        return super().get_queryset().filter(organization=org)
+
+    def perform_create(self, serializer):
+        org = get_current_org(self.request)
+        serializer.save(organization=org)

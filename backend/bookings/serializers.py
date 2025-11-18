@@ -34,3 +34,8 @@ class BookingSerializer(serializers.ModelSerializer):
         if attrs["end_time"] <= attrs["start_time"]:
             raise serializers.ValidationError("End time must be after start time.")
         return attrs
+
+    def create(self, validated_data):
+        contact = validated_data["contact"]
+        validated_data["organization"] = contact.organization
+        return super().create(validated_data)

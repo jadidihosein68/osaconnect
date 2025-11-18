@@ -18,6 +18,7 @@ class OutboundMessageSerializer(serializers.ModelSerializer):
         model = OutboundMessage
         fields = [
             "id",
+            "organization",
             "contact",
             "contact_id",
             "template",
@@ -34,7 +35,7 @@ class OutboundMessageSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["status", "error", "retry_count", "trace_id", "created_at", "updated_at", "template"]
+        read_only_fields = ["organization", "status", "error", "retry_count", "trace_id", "created_at", "updated_at", "template"]
 
     def validate(self, attrs):
         contact = attrs["contact"]
@@ -65,7 +66,12 @@ class OutboundMessageSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         contact = validated_data.pop("contact")
         template = validated_data.pop("template", None)
-        message = OutboundMessage.objects.create(contact=contact, template=template, **validated_data)
+        message = OutboundMessage.objects.create(
+            contact=contact,
+            template=template,
+            organization=contact.organization,
+            **validated_data,
+        )
         message.schedule_send()
         return message
 

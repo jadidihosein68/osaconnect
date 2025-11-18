@@ -27,8 +27,9 @@ npm install
 npm run dev  # http://localhost:5173 proxied to backend
 ```
 
-## Auth
+## Auth & Multi-tenancy
 - JWT via SimpleJWT (`/api/auth/token/`, `/api/auth/token/refresh/`), plus session/basic for admin.
+- Every API call must include `X-Org-ID` for the organization the user belongs to; membership is enforced server-side.
 - Frontend stores token in localStorage; a 401 clears token and redirects to `/login`.
 
 ## Key Endpoints
@@ -52,12 +53,13 @@ npm run dev  # http://localhost:5173 proxied to backend
 - Vite dev proxy forwards `/api`, `/health`, `/metrics` to `localhost:8000`.
 
 ## Current Behaviors
+- Multi-tenancy: all core models are scoped to `Organization`; access is filtered by `X-Org-ID` header + membership.
 - Outbound send: validates contact active + channel identifier, throttles, dispatches to stub channel senders (`messaging/channels.py`), records status/trace_id, updates last_outbound_at.
-- Inbound webhook: logs payload, attempts contact match on identifiers, triggers contact enrichment.
+- Inbound webhook: logs payload, attempts contact match on identifiers, triggers contact enrichment for the matched org; ignores unmatched orgs.
 - Opt-out: inbound webhook marks contacts unsubscribed if text includes STOP/UNSUBSCRIBE/CANCEL/OPTOUT.
 - Media validation: outbound media URL must be http(s) and one of jpg/png/pdf/mp4/mp3.
 - Templates: variables must have matching `{{var}}` placeholders in body.
-- Metrics: aggregates counts and failure/retrying stats.
+- Metrics: aggregates counts and failure/retrying stats per org.
 
 ## Known Gaps vs PRD (future work)
 - Real channel integrations (WA/Email/Telegram/IG) with callbacks, media validation, opt-out keyword detection.

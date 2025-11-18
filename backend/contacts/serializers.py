@@ -11,6 +11,7 @@ class ContactSerializer(serializers.ModelSerializer):
         model = Contact
         fields = [
             "id",
+            "organization",
             "full_name",
             "phone_whatsapp",
             "email",
@@ -26,7 +27,7 @@ class ContactSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["last_inbound_at", "last_outbound_at", "created_at", "updated_at"]
+        read_only_fields = ["organization", "last_inbound_at", "last_outbound_at", "created_at", "updated_at"]
 
     def validate(self, attrs):
         status = attrs.get("status", getattr(self.instance, "status", Contact.STATUS_ACTIVE))

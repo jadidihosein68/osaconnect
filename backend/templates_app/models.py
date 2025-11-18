@@ -4,6 +4,7 @@ from django.db import models
 
 
 class MessageTemplate(models.Model):
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE, related_name="templates")
     CHANNEL_WHATSAPP = "whatsapp"
     CHANNEL_EMAIL = "email"
     CHANNEL_TELEGRAM = "telegram"

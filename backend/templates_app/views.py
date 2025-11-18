@@ -6,6 +6,7 @@ from rest_framework.response import Response
 
 from .models import MessageTemplate
 from .serializers import MessageTemplateSerializer
+from organizations.utils import get_current_org
 
 
 class MessageTemplateViewSet(viewsets.ModelViewSet):
@@ -20,3 +21,11 @@ class MessageTemplateViewSet(viewsets.ModelViewSet):
         data = request.data or {}
         rendered = template.render(data)
         return Response({"rendered": rendered})
+
+    def get_queryset(self):
+        org = get_current_org(self.request)
+        return super().get_queryset().filter(organization=org)
+
+    def perform_create(self, serializer):
+        org = get_current_org(self.request)
+        serializer.save(organization=org)

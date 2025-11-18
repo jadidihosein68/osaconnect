@@ -33,14 +33,16 @@ class MetricsView(APIView):
         from contacts.models import Contact
         from messaging.models import InboundMessage, OutboundMessage
         from bookings.models import Booking
+        from organizations.utils import get_current_org
 
+        org = get_current_org(request)
         return Response(
             {
-                "contacts": Contact.objects.count(),
-                "outbound": OutboundMessage.objects.count(),
-                "inbound": InboundMessage.objects.count(),
-                "bookings": Booking.objects.count(),
-                "retrying": OutboundMessage.objects.filter(status=OutboundMessage.STATUS_RETRYING).count(),
-                "failed": OutboundMessage.objects.filter(status=OutboundMessage.STATUS_FAILED).count(),
+                "contacts": Contact.objects.filter(organization=org).count(),
+                "outbound": OutboundMessage.objects.filter(organization=org).count(),
+                "inbound": InboundMessage.objects.filter(organization=org).count(),
+                "bookings": Booking.objects.filter(organization=org).count(),
+                "retrying": OutboundMessage.objects.filter(organization=org, status=OutboundMessage.STATUS_RETRYING).count(),
+                "failed": OutboundMessage.objects.filter(organization=org, status=OutboundMessage.STATUS_FAILED).count(),
             }
         )

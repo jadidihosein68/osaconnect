@@ -8,6 +8,7 @@ from templates_app.models import MessageTemplate
 
 
 class OutboundMessage(models.Model):
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE, related_name="outbound_messages")
     STATUS_PENDING = "pending"
     STATUS_SENT = "sent"
     STATUS_FAILED = "failed"
@@ -55,6 +56,7 @@ class OutboundMessage(models.Model):
 
 
 class InboundMessage(models.Model):
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE, related_name="inbound_messages")
     contact = models.ForeignKey(Contact, on_delete=models.SET_NULL, null=True, blank=True, related_name="inbound_messages")
     channel = models.CharField(max_length=32)
     payload = models.JSONField(default=dict, blank=True)

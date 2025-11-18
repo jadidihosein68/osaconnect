@@ -10,6 +10,7 @@ class MessageTemplateSerializer(serializers.ModelSerializer):
         model = MessageTemplate
         fields = [
             "id",
+            "organization",
             "name",
             "channel",
             "language",
@@ -21,7 +22,7 @@ class MessageTemplateSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["created_at", "updated_at"]
+        read_only_fields = ["created_at", "updated_at", "organization"]
 
     def validate_variables(self, variables):
         if not isinstance(variables, list):

@@ -17,6 +17,7 @@ class Contact(models.Model):
         (STATUS_BOUNCED, "Bounced"),
     ]
 
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE, related_name="contacts")
     full_name = models.CharField(max_length=255)
     phone_whatsapp = models.CharField(max_length=32, blank=True, null=True, unique=True)
     email = models.EmailField(blank=True, null=True, unique=True)

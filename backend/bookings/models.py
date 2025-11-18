@@ -7,6 +7,7 @@ from contacts.models import Contact
 
 
 class Booking(models.Model):
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE, related_name="bookings")
     STATUS_PENDING = "pending"
     STATUS_CONFIRMED = "confirmed"
     STATUS_CANCELLED = "cancelled"
