@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from django.db import migrations, models
 import django.db.models.deletion
-import django.utils.timezone
-import django.core.validators
 
 
 class Migration(migrations.Migration):
@@ -18,7 +16,7 @@ class Migration(migrations.Migration):
                 ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
                 ("full_name", models.CharField(max_length=255)),
                 ("phone_whatsapp", models.CharField(blank=True, max_length=32, null=True, unique=True)),
-                ("email", models.EmailField(blank=True, max_length=254, null=True, unique=True, validators=[django.core.validators.validate_email])),
+                ("email", models.EmailField(blank=True, max_length=254, null=True, unique=True)),
                 ("telegram_chat_id", models.CharField(blank=True, max_length=64, null=True, unique=True)),
                 ("instagram_scoped_id", models.CharField(blank=True, max_length=64, null=True, unique=True)),
                 (

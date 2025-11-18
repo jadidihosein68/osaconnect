@@ -29,7 +29,9 @@ Key endpoints:
 - `/api/bookings/` scheduling
 - `/api/assistant/` KB-backed stub
 - `/api/auth/token/` obtain JWT (SimpleJWT) and `/api/auth/token/refresh/`
+- `/api/webhooks/{channel}/` inbound capture (WA/email/telegram/instagram payloads)
 - `/health/` service diagnostics
+- `/metrics/` lightweight service metrics
 
 ### Frontend (React + Tailwind + Vite)
 1. `cd frontend`
@@ -44,3 +46,4 @@ The frontend is intentionally lightweight to demonstrate flows across messaging,
 - Celery is configured to run eagerly by default for ease of local dev; set `CELERY_TASK_ALWAYS_EAGER=false` for async workers.
 - Knowledge base lives in `backend/knowledge_base.md`; plug an LLM provider in `assistant/views.py`.
 - Authentication defaults to JWT (SimpleJWT) + session auth. Create a user (`createsuperuser`) and obtain a token via `/api/auth/token/`. Pass `Authorization: Bearer <token>` on API calls.
+- Throttling: set `OUTBOUND_PER_MINUTE_LIMIT` in `.env` to enforce per-channel send ceilings.

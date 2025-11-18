@@ -39,6 +39,18 @@ class OutboundMessageSerializer(serializers.ModelSerializer):
         contact = attrs["contact"]
         if contact.status != contact.STATUS_ACTIVE:
             raise serializers.ValidationError("Cannot send to non-active contact.")
+        channel = attrs.get("channel")
+        destination = (
+            contact.phone_whatsapp
+            if channel == "whatsapp"
+            else contact.email
+            if channel == "email"
+            else contact.telegram_chat_id
+            if channel == "telegram"
+            else contact.instagram_scoped_id
+        )
+        if not destination:
+            raise serializers.ValidationError("Contact is missing the required identifier for this channel.")
         return attrs
 
     def create(self, validated_data):

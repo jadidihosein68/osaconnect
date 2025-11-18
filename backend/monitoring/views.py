@@ -23,3 +23,24 @@ class HealthcheckView(APIView):
                 },
             }
         )
+
+
+class MetricsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        from contacts.models import Contact
+        from messaging.models import InboundMessage, OutboundMessage
+        from bookings.models import Booking
+
+        return Response(
+            {
+                "contacts": Contact.objects.count(),
+                "outbound": OutboundMessage.objects.count(),
+                "inbound": InboundMessage.objects.count(),
+                "bookings": Booking.objects.count(),
+                "retrying": OutboundMessage.objects.filter(status=OutboundMessage.STATUS_RETRYING).count(),
+                "failed": OutboundMessage.objects.filter(status=OutboundMessage.STATUS_FAILED).count(),
+            }
+        )
