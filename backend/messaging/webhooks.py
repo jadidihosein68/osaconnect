@@ -23,6 +23,7 @@ class InboundWebhookView(APIView):
             media_url=payload.get("media_url"),
             received_at=timezone.now(),
         )
+        self._process_opt_out(contact, payload)
         return Response({"id": inbound.id, "contact": contact.id if contact else None, "status": "logged"})
 
     def _match_contact(self, payload: dict):
@@ -39,3 +40,12 @@ class InboundWebhookView(APIView):
                 if contact:
                     break
         return contact
+
+    def _process_opt_out(self, contact: Contact | None, payload: dict) -> None:
+        if not contact:
+            return
+        text = (payload.get("text") or payload.get("message") or "").strip().lower()
+        opt_out_keywords = {"stop", "unsubscribe", "cancel", "optout", "opt-out"}
+        if text and any(keyword in text for keyword in opt_out_keywords):
+            contact.status = Contact.STATUS_UNSUBSCRIBED
+            contact.save(update_fields=["status", "updated_at"])

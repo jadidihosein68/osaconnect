@@ -6,6 +6,7 @@ from contacts.models import Contact
 from contacts.serializers import ContactSerializer
 from templates_app.models import MessageTemplate
 from .models import InboundMessage, OutboundMessage
+from urllib.parse import urlparse
 
 
 class OutboundMessageSerializer(serializers.ModelSerializer):
@@ -51,6 +52,14 @@ class OutboundMessageSerializer(serializers.ModelSerializer):
         )
         if not destination:
             raise serializers.ValidationError("Contact is missing the required identifier for this channel.")
+        media_url = attrs.get("media_url")
+        if media_url:
+            parsed = urlparse(media_url)
+            if parsed.scheme not in ("http", "https"):
+                raise serializers.ValidationError("Media URL must be http(s).")
+            allowed_ext = (".jpg", ".jpeg", ".png", ".pdf", ".mp4", ".mp3")
+            if not parsed.path.lower().endswith(allowed_ext):
+                raise serializers.ValidationError("Media type not allowed; allowed: jpg, png, pdf, mp4, mp3.")
         return attrs
 
     def create(self, validated_data):

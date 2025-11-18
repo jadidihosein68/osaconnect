@@ -5,7 +5,7 @@ This repo implements a Django + React MVP aligned to the PRD in `README.md`. Use
 ## Stack & Structure
 - Backend: Django 5, DRF, SimpleJWT auth, Celery stubs, Redis config (optional), SQLite (default).
 - Frontend: React 18, Vite, Tailwind, React Query.
-- Layout: `backend/` Django project `corbi`; apps: `contacts`, `templates_app`, `messaging`, `bookings`, `assistant`, `monitoring`. Frontend lives in `frontend/`.
+- Layout: `backend/` Django project `corbi`; apps: `contacts`, `templates_app`, `messaging`, `bookings`, `assistant`, `monitoring`. Frontend lives in `frontend/` (Figma-derived UI).
 
 ## Setup (local dev)
 Backend:
@@ -54,6 +54,9 @@ npm run dev  # http://localhost:5173 proxied to backend
 ## Current Behaviors
 - Outbound send: validates contact active + channel identifier, throttles, dispatches to stub channel senders (`messaging/channels.py`), records status/trace_id, updates last_outbound_at.
 - Inbound webhook: logs payload, attempts contact match on identifiers, triggers contact enrichment.
+- Opt-out: inbound webhook marks contacts unsubscribed if text includes STOP/UNSUBSCRIBE/CANCEL/OPTOUT.
+- Media validation: outbound media URL must be http(s) and one of jpg/png/pdf/mp4/mp3.
+- Templates: variables must have matching `{{var}}` placeholders in body.
 - Metrics: aggregates counts and failure/retrying stats.
 
 ## Known Gaps vs PRD (future work)
