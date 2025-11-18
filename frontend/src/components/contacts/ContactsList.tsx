@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Search, Plus, Eye } from 'lucide-react';
 import { Badge } from '../ui/badge';
+import { fetchContacts, Contact } from '../../lib/api';
 
 interface ContactsListProps {
   onViewContact: (id: string) => void;
@@ -13,75 +14,37 @@ interface ContactsListProps {
 export function ContactsList({ onViewContact }: ContactsListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const contacts = [
-    {
-      id: '1',
-      name: 'John Smith',
-      phone: '+1 (555) 123-4567',
-      email: 'john.smith@email.com',
-      telegram: '@johnsmith',
-      instagram: '@john_smith',
-      status: 'Active',
-      lastInbound: '2 hours ago',
-      lastOutbound: '1 hour ago',
-    },
-    {
-      id: '2',
-      name: 'Sarah Johnson',
-      phone: '+1 (555) 234-5678',
-      email: 'sarah.j@email.com',
-      telegram: '@sarahj',
-      instagram: '@sarahjohnson',
-      status: 'Active',
-      lastInbound: '5 hours ago',
-      lastOutbound: '3 hours ago',
-    },
-    {
-      id: '3',
-      name: 'Mike Brown',
-      phone: '+1 (555) 345-6789',
-      email: 'mike.brown@email.com',
-      telegram: '-',
-      instagram: '@mikeb',
-      status: 'Unsubscribed',
-      lastInbound: '2 days ago',
-      lastOutbound: '1 day ago',
-    },
-    {
-      id: '4',
-      name: 'Emily Davis',
-      phone: '+1 (555) 456-7890',
-      email: 'emily.davis@email.com',
-      telegram: '@emilyd',
-      instagram: '-',
-      status: 'Active',
-      lastInbound: '1 day ago',
-      lastOutbound: '6 hours ago',
-    },
-    {
-      id: '5',
-      name: 'Robert Wilson',
-      phone: '+1 (555) 567-8901',
-      email: 'robert.w@email.com',
-      telegram: '@robertw',
-      instagram: '@robertwilson',
-      status: 'Blocked',
-      lastInbound: '3 days ago',
-      lastOutbound: '2 days ago',
-    },
-    {
-      id: '6',
-      name: 'Lisa Anderson',
-      phone: '+1 (555) 678-9012',
-      email: 'lisa.anderson@email.com',
-      telegram: '-',
-      instagram: '@lisa_a',
-      status: 'Bounced',
-      lastInbound: '1 week ago',
-      lastOutbound: '5 days ago',
-    },
-  ];
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await fetchContacts();
+        setContacts(data);
+      } catch (e) {
+        setError('Failed to load contacts');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const filtered = useMemo(
+    () =>
+      contacts.filter((c) => {
+        const matchesSearch =
+          c.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (c.email || '').toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesStatus = statusFilter === 'all' ? true : c.status === statusFilter;
+        return matchesSearch && matchesStatus;
+      }),
+    [contacts, searchQuery, statusFilter],
+  );
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -124,12 +87,12 @@ export function ContactsList({ onViewContact }: ContactsListProps) {
                 className="pl-10"
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="blocked">Blocked</SelectItem>
                 <SelectItem value="unsubscribed">Unsubscribed</SelectItem>
@@ -143,9 +106,13 @@ export function ContactsList({ onViewContact }: ContactsListProps) {
       {/* Contacts Table */}
       <Card>
         <CardHeader>
-          <CardTitle>All Contacts ({contacts.length})</CardTitle>
+          <CardTitle>All Contacts ({filtered.length})</CardTitle>
         </CardHeader>
         <CardContent>
+          {error && <p className="text-red-600 text-sm mb-2">{error}</p>}
+          {loading ? (
+            <p>Loading...</p>
+          ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -162,25 +129,23 @@ export function ContactsList({ onViewContact }: ContactsListProps) {
                 </tr>
               </thead>
               <tbody>
-                {contacts.map((contact) => (
+                {filtered.map((contact) => (
                   <tr key={contact.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-4 text-gray-900">{contact.name}</td>
-                    <td className="py-3 px-4 text-gray-600">{contact.phone}</td>
-                    <td className="py-3 px-4 text-gray-600">{contact.email}</td>
-                    <td className="py-3 px-4 text-gray-600">{contact.telegram}</td>
-                    <td className="py-3 px-4 text-gray-600">{contact.instagram}</td>
+                    <td className="py-3 px-4 text-gray-900">{contact.full_name}</td>
+                    <td className="py-3 px-4 text-gray-600">{contact.phone_whatsapp || '-'}</td>
+                    <td className="py-3 px-4 text-gray-600">{contact.email || '-'}</td>
+                    <td className="py-3 px-4 text-gray-600">{contact.telegram_chat_id || '-'}</td>
+                    <td className="py-3 px-4 text-gray-600">{contact.instagram_scoped_id || '-'}</td>
                     <td className="py-3 px-4">
-                      <Badge className={`${getStatusColor(contact.status)} text-white`}>
-                        {contact.status}
-                      </Badge>
+                      <Badge className={`${getStatusColor(contact.status)} text-white`}>{contact.status}</Badge>
                     </td>
-                    <td className="py-3 px-4 text-gray-600">{contact.lastInbound}</td>
-                    <td className="py-3 px-4 text-gray-600">{contact.lastOutbound}</td>
+                    <td className="py-3 px-4 text-gray-600">{contact.last_inbound_at || '-'}</td>
+                    <td className="py-3 px-4 text-gray-600">{contact.last_outbound_at || '-'}</td>
                     <td className="py-3 px-4">
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => onViewContact(contact.id)}
+                        onClick={() => onViewContact(String(contact.id))}
                       >
                         <Eye className="w-4 h-4" />
                       </Button>
@@ -190,6 +155,7 @@ export function ContactsList({ onViewContact }: ContactsListProps) {
               </tbody>
             </table>
           </div>
+          )}
         </CardContent>
       </Card>
     </div>

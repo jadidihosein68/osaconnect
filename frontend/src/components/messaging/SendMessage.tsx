@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -6,27 +6,74 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Textarea } from '../ui/textarea';
 import { Upload, Send } from 'lucide-react';
+import { fetchContacts, fetchTemplates, sendOutbound, Contact, Template } from '../../lib/api';
 
 export function SendMessage() {
   const [channel, setChannel] = useState('whatsapp');
-  const [selectedTemplate, setSelectedTemplate] = useState('');
-  const [variables, setVariables] = useState({ name: '', date: '', amount: '' });
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('');
+  const [variables, setVariables] = useState<Record<string, string>>({});
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [contactId, setContactId] = useState<number | null>(null);
+  const [body, setBody] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  const templates = {
-    whatsapp: ['Booking Confirmation', 'Payment Reminder', 'Welcome Message'],
-    email: ['Newsletter Template', 'Invoice Template', 'Follow-up Email'],
-    telegram: ['Notification Template', 'Update Message'],
-    instagram: ['DM Template', 'Story Reply Template'],
-  };
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [cData, tData] = await Promise.all([fetchContacts(), fetchTemplates()]);
+        setContacts(cData);
+        setTemplates(tData);
+      } catch {
+        setError('Failed to load contacts/templates');
+      }
+    };
+    load();
+  }, []);
+
+  const channelTemplates = useMemo(
+    () => templates.filter((t) => t.channel === channel),
+    [templates, channel],
+  );
 
   const getTemplatePreview = () => {
-    if (selectedTemplate === 'Booking Confirmation') {
-      return `Hi ${variables.name || '{name}'},\n\nYour booking has been confirmed for ${variables.date || '{date}'}.\n\nThank you for choosing our services!`;
+    const tpl = channelTemplates.find((t) => String(t.id) === selectedTemplate);
+    if (!tpl) return body || 'Select a template to see preview';
+    let rendered = tpl.body;
+    (tpl.variables || []).forEach((v) => {
+      const placeholder = `{{${v}}}`;
+      rendered = rendered.replace(placeholder, variables[v] || placeholder);
+    });
+    return rendered;
+  };
+
+  const handleSend = async () => {
+    if (!contactId) {
+      setError('Select a contact');
+      return;
     }
-    if (selectedTemplate === 'Payment Reminder') {
-      return `Hello ${variables.name || '{name}'},\n\nThis is a reminder that your payment of $${variables.amount || '{amount}'} is due.\n\nPlease complete the payment at your earliest convenience.`;
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const tpl = channelTemplates.find((t) => String(t.id) === selectedTemplate);
+      const renderedBody = tpl ? getTemplatePreview() : body;
+      await sendOutbound({
+        contact_id: contactId,
+        channel,
+        body: renderedBody,
+      });
+      setSuccess('Message sent');
+      setBody('');
+      setSelectedTemplate('');
+      setVariables({});
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Failed to send');
+    } finally {
+      setLoading(false);
     }
-    return 'Select a template to see preview';
   };
 
   return (
@@ -43,6 +90,8 @@ export function SendMessage() {
             <CardTitle>Message Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {error && <p className="text-red-600 text-sm">{error}</p>}
+            {success && <p className="text-green-600 text-sm">{success}</p>}
             <div className="space-y-2">
               <Label>Channel</Label>
               <Select value={channel} onValueChange={setChannel}>
@@ -60,15 +109,16 @@ export function SendMessage() {
 
             <div className="space-y-2">
               <Label>Contact</Label>
-              <Select>
+              <Select value={contactId ? String(contactId) : ''} onValueChange={(v) => setContactId(Number(v))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a contact" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1">John Smith</SelectItem>
-                  <SelectItem value="2">Sarah Johnson</SelectItem>
-                  <SelectItem value="3">Mike Brown</SelectItem>
-                  <SelectItem value="4">Emily Davis</SelectItem>
+                  {contacts.map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.full_name} ({c.status})
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -80,11 +130,12 @@ export function SendMessage() {
                   <SelectValue placeholder="Select a template" />
                 </SelectTrigger>
                 <SelectContent>
-                  {templates[channel as keyof typeof templates].map((template) => (
-                    <SelectItem key={template} value={template}>
-                      {template}
+                  {channelTemplates.map((tpl) => (
+                    <SelectItem key={tpl.id} value={String(tpl.id)}>
+                      {tpl.name}
                     </SelectItem>
                   ))}
+                  <SelectItem value="">Custom</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -92,35 +143,27 @@ export function SendMessage() {
             {selectedTemplate && (
               <div className="space-y-4 pt-4 border-t">
                 <div className="text-gray-900">Template Variables</div>
-                <div className="space-y-2">
-                  <Label>Name</Label>
-                  <Input
-                    placeholder="Enter name"
-                    value={variables.name}
-                    onChange={(e) => setVariables({ ...variables, name: e.target.value })}
-                  />
-                </div>
-                {selectedTemplate === 'Booking Confirmation' && (
-                  <div className="space-y-2">
-                    <Label>Date</Label>
+                {(channelTemplates.find((t) => String(t.id) === selectedTemplate)?.variables || []).map((v) => (
+                  <div className="space-y-2" key={v}>
+                    <Label>{v}</Label>
                     <Input
-                      type="date"
-                      value={variables.date}
-                      onChange={(e) => setVariables({ ...variables, date: e.target.value })}
+                      placeholder={v}
+                      value={variables[v] || ''}
+                      onChange={(e) => setVariables({ ...variables, [v]: e.target.value })}
                     />
                   </div>
-                )}
-                {selectedTemplate === 'Payment Reminder' && (
-                  <div className="space-y-2">
-                    <Label>Amount</Label>
-                    <Input
-                      type="number"
-                      placeholder="0.00"
-                      value={variables.amount}
-                      onChange={(e) => setVariables({ ...variables, amount: e.target.value })}
-                    />
-                  </div>
-                )}
+                ))}
+              </div>
+            )}
+            {!selectedTemplate && (
+              <div className="space-y-2">
+                <Label>Custom Message</Label>
+                <Textarea
+                  placeholder="Type your message"
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  rows={6}
+                />
               </div>
             )}
 
@@ -133,9 +176,9 @@ export function SendMessage() {
               </div>
             </div>
 
-            <Button className="w-full">
+            <Button className="w-full" onClick={handleSend} disabled={loading}>
               <Send className="w-4 h-4 mr-2" />
-              Send Message
+              {loading ? 'Sending...' : 'Send Message'}
             </Button>
           </CardContent>
         </Card>

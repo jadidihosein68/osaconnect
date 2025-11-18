@@ -10,6 +10,7 @@ from bookings.views import BookingViewSet
 from contacts.views import ContactViewSet
 from messaging.views import InboundMessageViewSet, OutboundMessageViewSet
 from monitoring.views import HealthcheckView, MetricsView
+from organizations.views import MembershipViewSet
 from templates_app.views import MessageTemplateViewSet
 from messaging.webhooks import InboundWebhookView
 
@@ -19,6 +20,7 @@ router.register(r"templates", MessageTemplateViewSet, basename="template")
 router.register(r"outbound", OutboundMessageViewSet, basename="outbound")
 router.register(r"inbound", InboundMessageViewSet, basename="inbound")
 router.register(r"bookings", BookingViewSet, basename="booking")
+router.register(r"memberships", MembershipViewSet, basename="membership")
 
 urlpatterns = [
     path("admin/", admin.site.urls),

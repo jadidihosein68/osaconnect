@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from '../ui/textarea';
 import { Badge } from '../ui/badge';
 import { ArrowLeft, Save, MessageSquare, Phone, Mail, Send as SendIcon } from 'lucide-react';
+import { fetchContacts, Contact } from '../../lib/api';
 
 interface ContactDetailProps {
   contactId: string | null;
@@ -15,22 +16,38 @@ interface ContactDetailProps {
 
 export function ContactDetail({ contactId, onBack }: ContactDetailProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [status, setStatus] = useState('Active');
+  const [status, setStatus] = useState('active');
+  const [contact, setContact] = useState<Contact | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock contact data
-  const contact = {
-    id: contactId || '1',
-    name: 'John Smith',
-    phone: '+1 (555) 123-4567',
-    email: 'john.smith@email.com',
-    telegram: '@johnsmith',
-    instagram: '@john_smith',
-    status: 'Active',
-    segments: ['VIP', 'Newsletter'],
-    notes: 'Preferred contact time: afternoons. Interested in premium services.',
-    createdDate: 'Jan 15, 2024',
-    updatedDate: 'Nov 18, 2024',
-  };
+  useEffect(() => {
+    if (!contactId) return;
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await fetchContacts();
+        const match = data.find((c) => String(c.id) === contactId);
+        if (match) {
+          setContact(match);
+          setStatus(match.status);
+        } else {
+          setError('Contact not found');
+        }
+      } catch {
+        setError('Failed to load contact');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [contactId]);
+
+  if (!contactId) return null;
+  if (loading) return <p className="p-6">Loading contact...</p>;
+  if (error) return <p className="p-6 text-red-600">{error}</p>;
+  if (!contact) return null;
 
   const messageHistory = [
     {
@@ -71,7 +88,7 @@ export function ContactDetail({ contactId, onBack }: ContactDetailProps) {
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
-            <h1 className="text-gray-900 mb-1">{contact.name}</h1>
+            <h1 className="text-gray-900 mb-1">{contact.full_name}</h1>
             <p className="text-gray-600">Contact Details</p>
           </div>
         </div>
@@ -100,7 +117,7 @@ export function ContactDetail({ contactId, onBack }: ContactDetailProps) {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Name</Label>
-                  <Input defaultValue={contact.name} disabled={!isEditing} />
+                  <Input defaultValue={contact.full_name} disabled={!isEditing} />
                 </div>
                 <div className="space-y-2">
                   <Label>Status</Label>
@@ -122,7 +139,7 @@ export function ContactDetail({ contactId, onBack }: ContactDetailProps) {
                 <Label>Phone</Label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <Input defaultValue={contact.phone} disabled={!isEditing} className="pl-10" />
+                  <Input defaultValue={contact.phone_whatsapp || ''} disabled={!isEditing} className="pl-10" />
                 </div>
               </div>
 
@@ -130,18 +147,18 @@ export function ContactDetail({ contactId, onBack }: ContactDetailProps) {
                 <Label>Email</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <Input defaultValue={contact.email} disabled={!isEditing} className="pl-10" />
+                  <Input defaultValue={contact.email || ''} disabled={!isEditing} className="pl-10" />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Telegram ID</Label>
-                  <Input defaultValue={contact.telegram} disabled={!isEditing} />
+                  <Input defaultValue={contact.telegram_chat_id || ''} disabled={!isEditing} />
                 </div>
                 <div className="space-y-2">
                   <Label>Instagram ID</Label>
-                  <Input defaultValue={contact.instagram} disabled={!isEditing} />
+                  <Input defaultValue={contact.instagram_scoped_id || ''} disabled={!isEditing} />
                 </div>
               </div>
             </CardContent>
@@ -153,7 +170,7 @@ export function ContactDetail({ contactId, onBack }: ContactDetailProps) {
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-2">
-                {contact.segments.map((segment) => (
+                {(contact.segments || []).map((segment) => (
                   <Badge key={segment} variant="outline">
                     {segment}
                   </Badge>

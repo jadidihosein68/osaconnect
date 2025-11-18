@@ -3,18 +3,32 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { login } from '../lib/api';
 
 interface LoginProps {
-  onLogin: () => void;
+  onLogin: (token: string) => void;
+  loading?: boolean;
+  memberships?: any[];
 }
 
 export function Login({ onLogin }: LoginProps) {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onLogin();
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      const data = await login(username, password);
+      onLogin(data.access);
+    } catch (err) {
+      setError('Invalid credentials');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -46,13 +60,12 @@ export function Login({ onLogin }: LoginProps) {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="username">Username</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="your@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="username"
+                placeholder="admin"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
               />
             </div>
@@ -67,8 +80,9 @@ export function Login({ onLogin }: LoginProps) {
                 required
               />
             </div>
-            <Button type="submit" className="w-full">
-              Login
+            {error && <p className="text-red-600 text-sm">{error}</p>}
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? 'Signing in...' : 'Login'}
             </Button>
           </form>
         </CardContent>

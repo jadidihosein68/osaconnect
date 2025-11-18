@@ -20,9 +20,12 @@ interface LayoutProps {
   currentScreen: string;
   onNavigate: (screen: string) => void;
   onLogout: () => void;
+  organizations?: { id: number; name: string }[];
+  currentOrgId?: number | null;
+  onOrgChange?: (orgId: number) => void;
 }
 
-export function Layout({ children, currentScreen, onNavigate, onLogout }: LayoutProps) {
+export function Layout({ children, currentScreen, onNavigate, onLogout, organizations = [], currentOrgId, onOrgChange }: LayoutProps) {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'contacts', label: 'Contacts', icon: Users },
@@ -115,13 +118,19 @@ export function Layout({ children, currentScreen, onNavigate, onLogout }: Layout
           <div className="flex-1" />
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
-              <div className="text-right">
-                <div className="text-gray-900">Admin User</div>
-                <div className="text-gray-500">admin@corbi.com</div>
-              </div>
-              <Avatar>
-                <AvatarFallback>AU</AvatarFallback>
-              </Avatar>
+              {organizations.length > 0 && (
+                <select
+                  className="border rounded px-3 py-1 text-sm"
+                  value={currentOrgId ?? ''}
+                  onChange={(e) => onOrgChange && onOrgChange(Number(e.target.value))}
+                >
+                  {organizations.map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
             <Button
               variant="ghost"

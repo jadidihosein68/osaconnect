@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 import { ContactsList } from './components/contacts/ContactsList';
@@ -16,8 +16,14 @@ import { OutboundLogs } from './components/monitoring/OutboundLogs';
 import { MonitoringDashboard } from './components/monitoring/MonitoringDashboard';
 import { Settings } from './components/settings/Settings';
 import { Layout } from './components/Layout';
+import { fetchMemberships, setAuth, setOrg, Membership } from './lib/api';
 
-export default function App() {
+interface AppProps {
+  onAuthPersist?: (token: string, orgId?: number) => void;
+  onOrgPersist?: (orgId: number) => void;
+}
+
+export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentScreen, setCurrentScreen] = useState('dashboard');
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
@@ -25,10 +31,27 @@ export default function App() {
   const [selectedInboundId, setSelectedInboundId] = useState<string | null>(null);
   const [isEditingTemplate, setIsEditingTemplate] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [memberships, setMemberships] = useState<Membership[]>([]);
+  const [orgId, setOrgId] = useState<number | null>(null);
+  const [loadingMemberships, setLoadingMemberships] = useState(false);
 
-  if (!isLoggedIn) {
-    return <Login onLogin={() => setIsLoggedIn(true)} />;
-  }
+  const handleLogin = async (token: string) => {
+    setAuth(token);
+    onAuthPersist?.(token);
+    setLoadingMemberships(true);
+    try {
+      const orgs = await fetchMemberships();
+      setMemberships(orgs);
+      if (orgs.length > 0) {
+        setOrgId(orgs[0].organization.id);
+        setOrg(orgs[0].organization.id);
+        onAuthPersist?.(token, orgs[0].organization.id);
+      }
+      setIsLoggedIn(true);
+    } finally {
+      setLoadingMemberships(false);
+    }
+  };
 
   const handleNavigate = (screen: string) => {
     setCurrentScreen(screen);
@@ -38,6 +61,16 @@ export default function App() {
     setIsEditingTemplate(false);
     setSelectedTemplateId(null);
   };
+
+  const handleOrgChange = (org: number) => {
+    setOrgId(org);
+    setOrg(org);
+    onOrgPersist?.(org);
+  };
+
+  if (!isLoggedIn) {
+    return <Login onLogin={handleLogin} loading={loadingMemberships} memberships={memberships} />;
+  }
 
   const renderScreen = () => {
     switch (currentScreen) {
@@ -118,6 +151,9 @@ export default function App() {
   return (
     <Layout 
       currentScreen={currentScreen}
+      organizations={memberships.map((m) => m.organization)}
+      currentOrgId={orgId}
+      onOrgChange={handleOrgChange}
       onNavigate={handleNavigate}
       onLogout={() => setIsLoggedIn(false)}
     >
