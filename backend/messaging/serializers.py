@@ -7,6 +7,9 @@ from contacts.serializers import ContactSerializer
 from templates_app.models import MessageTemplate
 from .models import InboundMessage, OutboundMessage
 from urllib.parse import urlparse
+import logging
+
+audit_logger = logging.getLogger("corbi.audit")
 
 
 class OutboundMessageSerializer(serializers.ModelSerializer):
@@ -75,6 +78,15 @@ class OutboundMessageSerializer(serializers.ModelSerializer):
             template=template,
             organization=contact.organization,
             **validated_data,
+        )
+        audit_logger.info(
+            "outbound.created",
+            extra={
+                "outbound_id": message.id,
+                "contact_id": contact.id,
+                "org": contact.organization_id,
+                "channel": message.channel,
+            },
         )
         message.schedule_send()
         return message

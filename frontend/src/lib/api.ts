@@ -136,6 +136,16 @@ export async function fetchInbound(): Promise<InboundMessage[]> {
   return data;
 }
 
+export async function replyToInbound(id: number | string, payload: { channel?: string; body: string }) {
+  const { data } = await api.post(`/inbound/${id}/reply/`, payload);
+  return data;
+}
+
+export async function linkInboundContact(id: number | string, payload: { contact_id: number }) {
+  const { data } = await api.post(`/inbound/${id}/link_contact/`, payload);
+  return data;
+}
+
 export async function fetchBookings(): Promise<Booking[]> {
   const { data } = await api.get("/bookings/");
   return data;
@@ -180,4 +190,29 @@ export async function fetchDashboard() {
     fetchBookings(),
   ]);
   return { metrics, contacts, outbound, inbound, bookings };
+}
+
+// Integrations
+export interface Integration {
+  id: number;
+  provider: string;
+  is_active: boolean;
+  extra: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function fetchIntegrations(): Promise<Integration[]> {
+  const { data } = await api.get("/integrations/");
+  return data;
+}
+
+export async function connectIntegration(provider: string, payload: { token: string; extra?: Record<string, any> }) {
+  const { data } = await api.post(`/integrations/${provider}/connect/`, payload);
+  return data;
+}
+
+export async function disconnectIntegration(provider: string) {
+  const { data } = await api.delete(`/integrations/${provider}/`);
+  return data;
 }

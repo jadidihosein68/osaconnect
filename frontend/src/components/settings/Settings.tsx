@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -6,71 +6,185 @@ import { Label } from '../ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Upload, CheckCircle, XCircle } from 'lucide-react';
 import { Badge } from '../ui/badge';
+import { connectIntegration, disconnectIntegration, fetchIntegrations, Integration } from '../../lib/api';
 
 export function Settings() {
   const [activeTab, setActiveTab] = useState('branding');
+  const [integrations, setIntegrations] = useState<Integration[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [errors, setErrors] = useState<string | null>(null);
 
-  const integrations = [
-    {
-      id: 'whatsapp',
+  const providerConfig: Record<
+    string,
+    { name: string; fields: { key: string; label: string; type?: string }[] }
+  > = {
+    whatsapp: {
       name: 'WhatsApp Business API',
-      status: 'connected',
-      lastSync: '5 mins ago',
       fields: [
-        { name: 'Phone Number ID', value: '1234567890' },
-        { name: 'Business Account ID', value: 'abc123def456' },
-        { name: 'Access Token', value: '••••••••••••' },
-      ]
+        { key: 'token', label: 'Access Token', type: 'password' },
+        { key: 'phone_number_id', label: 'Phone Number ID' },
+      ],
     },
-    {
-      id: 'email',
+    sendgrid: {
       name: 'Email Provider (SendGrid)',
-      status: 'connected',
-      lastSync: '10 mins ago',
       fields: [
-        { name: 'API Key', value: '••••••••••••' },
-        { name: 'Sender Email', value: 'noreply@corbi.com' },
-        { name: 'Sender Name', value: 'Corbi Team' },
-      ]
+        { key: 'token', label: 'API Key', type: 'password' },
+        { key: 'sender_email', label: 'Sender Email' },
+        { key: 'sender_name', label: 'Sender Name' },
+      ],
     },
-    {
-      id: 'telegram',
+    telegram: {
       name: 'Telegram Bot',
-      status: 'disconnected',
-      lastSync: 'Never',
       fields: [
-        { name: 'Bot Token', value: '' },
-        { name: 'Bot Username', value: '' },
-      ]
+        { key: 'token', label: 'Bot Token', type: 'password' },
+        { key: 'bot_username', label: 'Bot Username' },
+      ],
     },
-    {
-      id: 'instagram',
+    instagram: {
       name: 'Instagram Messaging',
-      status: 'disconnected',
-      lastSync: 'Never',
       fields: [
-        { name: 'App ID', value: '' },
-        { name: 'App Secret', value: '' },
-        { name: 'Access Token', value: '' },
-      ]
+        { key: 'token', label: 'Access Token', type: 'password' },
+        { key: 'instagram_scoped_id', label: 'Instagram Scoped ID' },
+      ],
     },
-    {
-      id: 'calendar',
+    google_calendar: {
       name: 'Calendar Integration (Google)',
-      status: 'connected',
-      lastSync: '1 hour ago',
       fields: [
-        { name: 'Calendar ID', value: 'primary' },
-        { name: 'OAuth Token', value: '••••••••••••' },
-      ]
+        { key: 'token', label: 'OAuth Token', type: 'password' },
+        { key: 'calendar_id', label: 'Calendar ID' },
+      ],
     },
-  ];
+  };
+
+  const [formState, setFormState] = useState<Record<string, Record<string, string>>>({});
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setErrors(null);
+      try {
+        const data = await fetchIntegrations();
+        setIntegrations(data);
+      } catch {
+        setErrors('Failed to load integrations.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const handleFieldChange = (provider: string, key: string, value: string) => {
+    setFormState((prev) => ({
+      ...prev,
+      [provider]: { ...(prev[provider] || {}), [key]: value },
+    }));
+  };
+
+  const handleConnect = async (provider: string) => {
+    setLoading(true);
+    setMessage(null);
+    setErrors(null);
+    const entries = formState[provider] || {};
+    const token = entries.token || '';
+    const extra = { ...entries };
+    delete extra.token;
+    try {
+      const res = await connectIntegration(provider, { token, extra });
+      setMessage(res.message || 'Connected');
+      // refresh list
+      const updated = await fetchIntegrations();
+      setIntegrations(updated);
+    } catch (e) {
+      setErrors('Failed to connect integration.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDisconnect = async (provider: string) => {
+    setLoading(true);
+    setMessage(null);
+    setErrors(null);
+    try {
+      const res = await disconnectIntegration(provider);
+      setMessage(res.message || 'Disconnected');
+      const updated = await fetchIntegrations();
+      setIntegrations(updated);
+    } catch {
+      setErrors('Failed to disconnect.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderIntegrationCard = (provider: string) => {
+    const integration = integrations.find((i) => i.provider === provider);
+    const cfg = providerConfig[provider];
+    const status = integration?.is_active ? 'connected' : 'disconnected';
+    return (
+      <Card key={provider}>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <CardTitle>{cfg.name}</CardTitle>
+              <Badge className={`${status === 'connected' ? 'bg-green-500 text-white' : 'bg-gray-500 text-white'}`}>
+                {status === 'connected' ? (
+                  <>
+                    <CheckCircle className="w-3 h-3 mr-1" />
+                    Connected
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-3 h-3 mr-1" />
+                    Disconnected
+                  </>
+                )}
+              </Badge>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {cfg.fields.map((field) => (
+            <div key={field.key} className="space-y-2">
+              <Label>{field.label}</Label>
+              <Input
+                type={field.type || 'text'}
+                value={(formState[provider]?.[field.key] ?? integration?.extra?.[field.key] ?? '') as string}
+                onChange={(e) => handleFieldChange(provider, field.key, e.target.value)}
+              />
+            </div>
+          ))}
+
+          <div className="flex gap-2 pt-4">
+            {status === 'connected' ? (
+              <>
+                <Button onClick={() => handleConnect(provider)} disabled={loading}>
+                  Save Changes
+                </Button>
+                <Button variant="destructive" onClick={() => handleDisconnect(provider)} disabled={loading}>
+                  Disconnect
+                </Button>
+              </>
+            ) : (
+              <Button onClick={() => handleConnect(provider)} disabled={loading}>
+                Connect
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-gray-900 mb-2">Settings</h1>
         <p className="text-gray-600">Manage your account and integrations</p>
+        {message && <p className="text-green-600 text-sm mt-1">{message}</p>}
+        {errors && <p className="text-red-600 text-sm mt-1">{errors}</p>}
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -150,60 +264,8 @@ export function Settings() {
 
         {/* Integrations Tab */}
         <TabsContent value="integrations" className="space-y-6">
-          {integrations.map((integration) => (
-            <Card key={integration.id}>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <CardTitle>{integration.name}</CardTitle>
-                    <Badge className={`${
-                      integration.status === 'connected' 
-                        ? 'bg-green-500 text-white' 
-                        : 'bg-gray-500 text-white'
-                    }`}>
-                      {integration.status === 'connected' ? (
-                        <>
-                          <CheckCircle className="w-3 h-3 mr-1" />
-                          Connected
-                        </>
-                      ) : (
-                        <>
-                          <XCircle className="w-3 h-3 mr-1" />
-                          Disconnected
-                        </>
-                      )}
-                    </Badge>
-                  </div>
-                  <div className="text-gray-500">
-                    Last sync: {integration.lastSync}
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {integration.fields.map((field, index) => (
-                  <div key={index} className="space-y-2">
-                    <Label>{field.name}</Label>
-                    <Input 
-                      defaultValue={field.value} 
-                      type={field.name.toLowerCase().includes('token') || field.name.toLowerCase().includes('secret') || field.name.toLowerCase().includes('key') ? 'password' : 'text'}
-                    />
-                  </div>
-                ))}
-
-                <div className="flex gap-2 pt-4">
-                  <Button variant="outline">Test Connection</Button>
-                  {integration.status === 'connected' ? (
-                    <>
-                      <Button>Save Changes</Button>
-                      <Button variant="destructive">Disconnect</Button>
-                    </>
-                  ) : (
-                    <Button>Connect</Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          {loading && integrations.length === 0 ? <p>Loading integrations...</p> : null}
+          {Object.keys(providerConfig).map((provider) => renderIntegrationCard(provider))}
         </TabsContent>
       </Tabs>
     </div>

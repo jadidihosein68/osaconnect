@@ -3,11 +3,13 @@ from __future__ import annotations
 from rest_framework import filters, viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+import logging
 from organizations.utils import get_current_org
 from organizations.permissions import IsOrgMemberWithRole
 
 from .models import InboundMessage, OutboundMessage
 from .serializers import InboundMessageSerializer, OutboundMessageSerializer
+audit_logger = logging.getLogger("corbi.audit")
 
 
 class OutboundMessageViewSet(viewsets.ModelViewSet):
@@ -49,6 +51,10 @@ class InboundMessageViewSet(viewsets.ReadOnlyModelViewSet):
         )
         serializer.is_valid(raise_exception=True)
         outbound = serializer.save()
+        audit_logger.info(
+            "inbound.reply",
+            extra={"inbound_id": inbound.id, "outbound_id": outbound.id, "org": inbound.organization_id, "user": getattr(request.user, "username", "anon")},
+        )
         return Response(OutboundMessageSerializer(outbound).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
@@ -65,4 +71,8 @@ class InboundMessageViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({"detail": "Contact not found in organization"}, status=status.HTTP_404_NOT_FOUND)
         inbound.contact = contact
         inbound.save(update_fields=["contact", "updated_at"])
+        audit_logger.info(
+            "inbound.link_contact",
+            extra={"inbound_id": inbound.id, "contact_id": contact.id, "org": inbound.organization_id, "user": getattr(request.user, "username", "anon")},
+        )
         return Response(InboundMessageSerializer(inbound).data)

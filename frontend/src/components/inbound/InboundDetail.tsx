@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { ArrowLeft, User, Plus } from 'lucide-react';
-import { fetchInbound, InboundMessage } from '../../lib/api';
+import { ArrowLeft, User, Plus, Send, Link2 } from 'lucide-react';
+import { fetchInbound, InboundMessage, linkInboundContact, replyToInbound } from '../../lib/api';
 
 interface InboundDetailProps {
   inboundId: string | null;
@@ -14,6 +14,10 @@ export function InboundDetail({ inboundId, onBack }: InboundDetailProps) {
   const [message, setMessage] = useState<InboundMessage | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [replyBody, setReplyBody] = useState('');
+  const [linkContactId, setLinkContactId] = useState('');
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!inboundId) return;
@@ -33,6 +37,33 @@ export function InboundDetail({ inboundId, onBack }: InboundDetailProps) {
     };
     load();
   }, [inboundId]);
+
+  const handleReply = async () => {
+    if (!message) return;
+    setActionMessage(null);
+    setActionError(null);
+    try {
+      await replyToInbound(message.id, { body: replyBody || 'Thanks for reaching out.' });
+      setActionMessage('Reply sent.');
+      setReplyBody('');
+    } catch (err) {
+      setActionError('Failed to send reply.');
+    }
+  };
+
+  const handleLinkContact = async () => {
+    if (!message || !linkContactId) return;
+    setActionMessage(null);
+    setActionError(null);
+    try {
+      const updated = await linkInboundContact(message.id, { contact_id: Number(linkContactId) });
+      setMessage(updated);
+      setActionMessage('Contact linked.');
+      setLinkContactId('');
+    } catch {
+      setActionError('Failed to link contact.');
+    }
+  };
 
   if (!inboundId) return null;
   if (loading) return <p className="p-6">Loading inbound...</p>;
@@ -116,6 +147,8 @@ export function InboundDetail({ inboundId, onBack }: InboundDetailProps) {
               <CardTitle>Matched Contact</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {actionMessage && <p className="text-green-600 text-sm">{actionMessage}</p>}
+              {actionError && <p className="text-red-600 text-sm">{actionError}</p>}
               {message.contact ? (
                 <>
                   <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
@@ -125,12 +158,18 @@ export function InboundDetail({ inboundId, onBack }: InboundDetailProps) {
                       <div className="text-green-600">Existing Contact</div>
                     </div>
                   </div>
-                  <Button variant="outline" className="w-full">
-                    View Contact Profile
-                  </Button>
-                  <Button variant="outline" className="w-full">
-                    Send Reply
-                  </Button>
+                  <div className="space-y-2">
+                    <textarea
+                      value={replyBody}
+                      onChange={(e) => setReplyBody(e.target.value)}
+                      placeholder="Type a quick reply..."
+                      className="w-full border rounded p-2 text-sm"
+                    />
+                    <Button variant="outline" className="w-full" onClick={handleReply}>
+                      <Send className="w-4 h-4 mr-2" />
+                      Send Reply
+                    </Button>
+                  </div>
                 </>
               ) : (
                 <>
@@ -139,10 +178,22 @@ export function InboundDetail({ inboundId, onBack }: InboundDetailProps) {
                       No matching contact found
                     </div>
                   </div>
-                  <Button className="w-full">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create New Contact
-                  </Button>
+                  <div className="space-y-2">
+                    <input
+                      value={linkContactId}
+                      onChange={(e) => setLinkContactId(e.target.value)}
+                      placeholder="Existing contact ID"
+                      className="w-full border rounded p-2 text-sm"
+                    />
+                    <Button className="w-full" onClick={handleLinkContact}>
+                      <Link2 className="w-4 h-4 mr-2" />
+                      Link Contact
+                    </Button>
+                    <Button variant="outline" className="w-full">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create New Contact
+                    </Button>
+                  </div>
                 </>
               )}
             </CardContent>

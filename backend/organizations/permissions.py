@@ -20,3 +20,14 @@ class IsOrgMemberWithRole(BasePermission):
         return Membership.objects.filter(user=request.user, organization__memberships__user=request.user).exclude(
             role=Membership.ROLE_VIEWER
         ).exists()
+
+
+class IsOrgAdmin(BasePermission):
+    """
+    Allows access only to org admins for mutating operations.
+    """
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        return Membership.objects.filter(user=request.user, role=Membership.ROLE_ADMIN).exists()

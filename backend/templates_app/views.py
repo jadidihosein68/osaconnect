@@ -3,11 +3,14 @@ from __future__ import annotations
 from rest_framework import filters, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+import logging
 
 from .models import MessageTemplate
 from .serializers import MessageTemplateSerializer
 from organizations.utils import get_current_org
 from organizations.permissions import IsOrgMemberWithRole
+
+audit_logger = logging.getLogger("corbi.audit")
 
 
 class MessageTemplateViewSet(viewsets.ModelViewSet):
@@ -31,6 +34,7 @@ class MessageTemplateViewSet(viewsets.ModelViewSet):
         template.approved_by = request.user.username if request.user and request.user.is_authenticated else "system"
         template.approved_at = template.approved_at or template.updated_at
         template.save(update_fields=["approved", "approved_by", "approved_at", "updated_at"])
+        audit_logger.info("template.approved", extra={"template_id": template.id, "user": template.approved_by, "org": template.organization_id})
         return Response({"status": "approved", "id": template.id})
 
     def get_queryset(self):

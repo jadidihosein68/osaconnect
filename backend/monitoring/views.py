@@ -4,6 +4,8 @@ import socket
 
 from django.conf import settings
 from django.utils import timezone
+from django.db import connections
+from django.db.migrations.executor import MigrationExecutor
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
@@ -16,6 +18,14 @@ class HealthcheckView(APIView):
     permission_classes = []
 
     def get(self, request):
+        pending_migrations = 0
+        try:
+            executor = MigrationExecutor(connections["default"])
+            plan = executor.migration_plan(executor.loader.graph.leaf_nodes())
+            pending_migrations = len(plan)
+        except Exception:
+            pending_migrations = -1  # signal check failure without breaking health
+
         return Response(
             {
                 "status": "ok",
@@ -25,6 +35,7 @@ class HealthcheckView(APIView):
                     "celery_broker": settings.CELERY_BROKER_URL,
                     "eager": settings.CELERY_TASK_ALWAYS_EAGER,
                 },
+                "pending_migrations": pending_migrations,
             }
         )
 
@@ -89,5 +100,20 @@ class MonitoringSummaryView(APIView):
                 },
                 "success_rate": success_rate,
                 "average_response_ms": None,  # placeholder until callbacks supply timing metadata
+            }
+        )
+
+
+class SettingsView(APIView):
+    authentication_classes = [JWTAuthentication, SessionAuthentication, BasicAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(
+            {
+                "outbound_per_minute_limit": getattr(settings, "OUTBOUND_PER_MINUTE_LIMIT", None),
+                "assistant_provider": getattr(settings, "ASSISTANT_PROVIDER", "stub"),
+                "calendar_provider": getattr(settings, "CALENDAR_PROVIDER", None),
+                "channels": ["whatsapp", "email", "telegram", "instagram"],
             }
         )

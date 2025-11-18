@@ -15,6 +15,7 @@ python -m venv env && source env/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 python manage.py migrate
+python manage.py seed_demo  # creates Demo Org, demo user (demo/changeme123), sample data
 python manage.py createsuperuser
 python manage.py runserver  # http://localhost:8000
 # optional async worker
@@ -43,6 +44,8 @@ npm run dev  # http://localhost:5173 proxied to backend
 - Assistant: `POST /api/assistant/` (KB-backed stub, requires auth/org)
 - Health: `/health/`; Metrics: `/api/metrics/` (counts, failures, retrying) – requires JWT + `X-Org-ID`
 - Monitoring summary KPIs: `/api/monitoring/summary/` (today totals, success rate, inbound today)
+- Settings snapshot: `/api/settings/` (non-secret runtime config like limits/providers)
+- Integrations: `GET /api/integrations/`, `POST /api/integrations/{provider}/connect/`, `DELETE /api/integrations/{provider}/` (org admin only; tokens encrypted, not returned)
 - Admin: `/admin/`
 
 ## Important Config
@@ -65,6 +68,7 @@ npm run dev  # http://localhost:5173 proxied to backend
 - Templates: variables must have matching `{{var}}` placeholders in body.
 - Metrics: aggregates counts/failures/retrying and today aggregates; monitoring summary provides today totals, success rate, inbound today.
 - Bookings: calendar stub writes `external_calendar_id` when provider keys set.
+- Assistant: now requires auth/org and returns KB snippets; replace with real LLM provider when ready.
 
 ## Known Gaps vs PRD (future work)
 - Real channel integrations (WA/Email/Telegram/IG) with callbacks, media validation, opt-out keyword detection.

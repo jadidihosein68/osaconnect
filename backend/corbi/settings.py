@@ -21,6 +21,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "corsheaders",
+    "integrations",
     "organizations",
     "contacts",
     "messaging",
@@ -126,3 +127,20 @@ OUTBOUND_PER_MINUTE_LIMIT = int(os.getenv("OUTBOUND_PER_MINUTE_LIMIT", 60))
 # AI Assistant
 ###############################################################################
 ASSISTANT_KB_PATH = os.getenv("ASSISTANT_KB_PATH", BASE_DIR / "knowledge_base.md")
+
+###############################################################################
+# Logging
+###############################################################################
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {"class": "logging.StreamHandler"},
+    },
+    "loggers": {
+        "corbi.audit": {
+            "handlers": ["console"],
+            "level": "INFO",
+        },
+    },
+}
