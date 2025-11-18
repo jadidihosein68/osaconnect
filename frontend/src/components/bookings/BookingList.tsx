@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Plus, Eye, Calendar as CalendarIcon } from 'lucide-react';
+import { Input } from '../ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { fetchBookings, Booking } from '../../lib/api';
 
 interface BookingListProps {
@@ -14,6 +16,9 @@ export function BookingList({ onViewBooking, onCreateBooking }: BookingListProps
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   useEffect(() => {
     const load = async () => {
@@ -30,6 +35,21 @@ export function BookingList({ onViewBooking, onCreateBooking }: BookingListProps
     };
     load();
   }, []);
+
+  const filtered = useMemo(
+    () =>
+      bookings.filter((b) => {
+        const matchesStatus = statusFilter === 'all' ? true : b.status === statusFilter;
+        const target = (b.contact?.full_name || '') + (b.title || '');
+        const matchesSearch = target.toLowerCase().includes(search.toLowerCase());
+        return matchesStatus && matchesSearch;
+      }).sort((a, b) => {
+        const aDate = new Date(a.start_time).getTime();
+        const bDate = new Date(b.start_time).getTime();
+        return sortOrder === 'asc' ? aDate - bDate : bDate - aDate;
+      }),
+    [bookings, search, statusFilter, sortOrder],
+  );
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -100,7 +120,7 @@ export function BookingList({ onViewBooking, onCreateBooking }: BookingListProps
       {/* Bookings Table */}
       <Card>
         <CardHeader>
-          <CardTitle>All Bookings ({bookings.length})</CardTitle>
+          <CardTitle>All Bookings ({filtered.length})</CardTitle>
         </CardHeader>
         <CardContent>
           {error && <p className="text-red-600 text-sm mb-2">{error}</p>}
@@ -108,6 +128,35 @@ export function BookingList({ onViewBooking, onCreateBooking }: BookingListProps
             <p>Loading bookings...</p>
           ) : (
           <div className="overflow-x-auto">
+            <div className="flex gap-4 mb-4">
+              <Input
+                placeholder="Search by contact or title"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="max-w-sm"
+              />
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="confirmed">Confirmed</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="rescheduled">Rescheduled</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as 'asc' | 'desc')}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Sort" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="asc">Soonest first</SelectItem>
+                  <SelectItem value="desc">Latest first</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200">
@@ -121,7 +170,7 @@ export function BookingList({ onViewBooking, onCreateBooking }: BookingListProps
                 </tr>
               </thead>
               <tbody>
-                {bookings.map((booking) => (
+                {filtered.map((booking) => (
                   <tr key={booking.id} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="py-3 px-4 text-gray-900">{booking.contact?.full_name || '-'}</td>
                     <td className="py-3 px-4 text-gray-600">{booking.title}</td>

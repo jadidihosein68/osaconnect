@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from contacts.models import Contact
 from .channels import get_sender
-from .models import OutboundMessage
+from .models import OutboundMessage, Suppression
 from django.conf import settings
 
 
@@ -41,6 +41,16 @@ def send_outbound_message(self, outbound_id: int):
         message.save(update_fields=["status", "error", "updated_at"])
         return
 
+    # suppression check
+    suppressed = Suppression.objects.filter(
+        organization=message.organization, channel=message.channel, identifier=destination
+    ).exists()
+    if suppressed:
+        message.status = OutboundMessage.STATUS_FAILED
+        message.error = "Suppressed recipient"
+        message.save(update_fields=["status", "error", "updated_at"])
+        return
+
     try:
         sender = get_sender(message.channel)
         destination = (
@@ -64,9 +74,11 @@ def send_outbound_message(self, outbound_id: int):
             message.status = OutboundMessage.STATUS_SENT
             message.error = ""
             message.trace_id = result.provider_message_id or _generate_trace_id()
+            message.provider_message_id = result.provider_message_id or ""
+            message.provider_status = "sent"
             message.contact.last_outbound_at = timezone.now()
             message.contact.save(update_fields=["last_outbound_at", "updated_at"])
-        message.save(update_fields=["status", "error", "trace_id", "retry_count", "updated_at"])
+        message.save(update_fields=["status", "error", "trace_id", "provider_message_id", "provider_status", "retry_count", "updated_at"])
     except Exception as exc:  # pragma: no cover - stub retry path
         message.status = OutboundMessage.STATUS_RETRYING
         message.error = str(exc)

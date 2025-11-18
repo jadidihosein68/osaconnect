@@ -28,6 +28,7 @@ class InboundWebhookView(APIView):
             received_at=timezone.now(),
         )
         self._process_opt_out(contact, payload)
+        self._maybe_suppress(payload, org, channel)
         return Response({"id": inbound.id, "contact": contact.id if contact else None, "status": "logged"})
 
     def _match_contact(self, payload: dict):
@@ -53,3 +54,15 @@ class InboundWebhookView(APIView):
         if text and any(keyword in text for keyword in opt_out_keywords):
             contact.status = Contact.STATUS_UNSUBSCRIBED
             contact.save(update_fields=["status", "updated_at"])
+
+    def _maybe_suppress(self, payload: dict, org, channel: str) -> None:
+        from .models import Suppression
+
+        if not org:
+            return
+        if payload.get("bounce") or payload.get("delivery_status") == "bounced":
+            identifier = payload.get("email") or payload.get("phone") or payload.get("wa_id")
+            if identifier:
+                Suppression.objects.get_or_create(
+                    organization=org, channel=channel, identifier=identifier, defaults={"reason": "bounce"}
+                )

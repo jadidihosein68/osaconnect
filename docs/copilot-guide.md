@@ -30,17 +30,18 @@ npm run dev  # http://localhost:5173 proxied to backend
 ## Auth & Multi-tenancy
 - JWT via SimpleJWT (`/api/auth/token/`, `/api/auth/token/refresh/`), plus session/basic for admin.
 - Every API call must include `X-Org-ID` for the organization the user belongs to; membership is enforced server-side.
-- Frontend stores token in localStorage; a 401 clears token and redirects to `/login`.
+- Frontend stores token in localStorage; a 401 clears token and redirects to `/login`. Token/org are hydrated on refresh; metrics and data fetches require a valid org.
 
 ## Key Endpoints
 - Contacts: `GET/POST /api/contacts/`, `POST /api/contacts/{id}/mark_inbound/`
-- Templates: `GET/POST /api/templates/`, `POST /api/templates/{id}/render/`
-- Outbound: `GET/POST /api/outbound/` (validates contact status & identifier; throttled)
+- Templates: `GET/POST /api/templates/`, `POST /api/templates/{id}/render/`, `POST /api/templates/{id}/approve/`
+- Outbound: `GET/POST /api/outbound/` (validates contact status & identifier; throttled; suppression-aware)
 - Inbound log: `GET /api/inbound/` (read-only)
-- Inbound webhooks: `POST /api/webhooks/{channel}/` (channel=whatsapp|email|telegram|instagram; logs payload, enriches contact if matched)
+- Inbound webhooks: `POST /api/webhooks/{channel}/` (channel=whatsapp|email/telegram/instagram; logs payload, enriches contact if matched)
+- Provider callbacks: `POST /api/callbacks/{channel}/` (provider status updates)
 - Bookings: `GET/POST /api/bookings/`
 - Assistant: `POST /api/assistant/` (KB stub at `backend/knowledge_base.md`)
-- Health: `/health/`; Metrics: `/metrics/` (counts, failures, retrying)
+- Health: `/health/`; Metrics: `/api/metrics/` (counts, failures, retrying) – requires JWT + `X-Org-ID`
 - Admin: `/admin/`
 
 ## Important Config

@@ -18,6 +18,7 @@ class BookingSerializer(serializers.ModelSerializer):
             "contact",
             "contact_id",
             "title",
+            "title",
             "start_time",
             "end_time",
             "status",
@@ -39,3 +40,7 @@ class BookingSerializer(serializers.ModelSerializer):
         contact = validated_data["contact"]
         validated_data["organization"] = contact.organization
         return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        validated_data.pop("contact", None)  # contact/org immutable here
+        return super().update(instance, validated_data)

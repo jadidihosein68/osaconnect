@@ -13,11 +13,15 @@ class OutboundMessage(models.Model):
     STATUS_SENT = "sent"
     STATUS_FAILED = "failed"
     STATUS_RETRYING = "retrying"
+    STATUS_DELIVERED = "delivered"
+    STATUS_READ = "read"
     STATUS_CHOICES = [
         (STATUS_PENDING, "Pending"),
         (STATUS_SENT, "Sent"),
         (STATUS_FAILED, "Failed"),
         (STATUS_RETRYING, "Retrying"),
+        (STATUS_DELIVERED, "Delivered"),
+        (STATUS_READ, "Read"),
     ]
 
     contact = models.ForeignKey(Contact, on_delete=models.CASCADE, related_name="outbound_messages")
@@ -33,6 +37,8 @@ class OutboundMessage(models.Model):
     error = models.TextField(blank=True, default="")
     retry_count = models.PositiveIntegerField(default=0)
     trace_id = models.CharField(max_length=64, blank=True, default="")
+    provider_message_id = models.CharField(max_length=128, blank=True, default="")
+    provider_status = models.CharField(max_length=64, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -86,3 +92,14 @@ class InboundMessage(models.Model):
         with transaction.atomic():
             super().save(*args, **kwargs)
             self.enrich_contact()
+
+
+class Suppression(models.Model):
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE, related_name="suppressions")
+    channel = models.CharField(max_length=32)
+    identifier = models.CharField(max_length=255)
+    reason = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("organization", "channel", "identifier")

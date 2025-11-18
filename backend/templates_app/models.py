@@ -24,6 +24,8 @@ class MessageTemplate(models.Model):
     variables = models.JSONField(default=list, blank=True)
     category = models.CharField(max_length=64, blank=True, default="")
     approved = models.BooleanField(default=False)
+    approved_by = models.CharField(max_length=120, blank=True, default="")
+    approved_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

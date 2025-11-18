@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.contrib import admin
 
-from .models import InboundMessage, OutboundMessage
+from .models import InboundMessage, OutboundMessage, Suppression
 
 
 @admin.register(OutboundMessage)
@@ -18,4 +18,12 @@ class InboundMessageAdmin(admin.ModelAdmin):
     list_display = ("contact", "channel", "received_at")
     list_filter = ("channel",)
     search_fields = ("contact__full_name", "contact__email")
+    readonly_fields = ("created_at",)
+
+
+@admin.register(Suppression)
+class SuppressionAdmin(admin.ModelAdmin):
+    list_display = ("organization", "channel", "identifier", "reason", "created_at")
+    search_fields = ("identifier", "organization__name", "reason")
+    list_filter = ("channel", "organization")
     readonly_fields = ("created_at",)

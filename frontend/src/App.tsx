@@ -36,14 +36,17 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
   const handleLogin = async (token: string) => {
     setAuth(token);
     onAuthPersist?.(token);
+    localStorage.setItem('corbi_token', token);
     setLoadingMemberships(true);
     try {
       const orgs = await fetchMemberships();
       setMemberships(orgs);
       if (orgs.length > 0) {
-        setOrgId(orgs[0].organization.id);
-        setOrg(orgs[0].organization.id);
-        onAuthPersist?.(token, orgs[0].organization.id);
+        const selectedOrg = orgs[0].organization.id;
+        setOrgId(selectedOrg);
+        setOrg(selectedOrg);
+        onAuthPersist?.(token, selectedOrg);
+        localStorage.setItem('corbi_org', String(selectedOrg));
       }
       setIsLoggedIn(true);
       navigate('/', { replace: true });

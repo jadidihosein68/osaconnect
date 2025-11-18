@@ -13,6 +13,7 @@ from monitoring.views import HealthcheckView, MetricsView
 from organizations.views import MembershipViewSet
 from templates_app.views import MessageTemplateViewSet
 from messaging.webhooks import InboundWebhookView
+from messaging.callbacks import ProviderCallbackView
 
 router = routers.DefaultRouter()
 router.register(r"contacts", ContactViewSet, basename="contact")
@@ -26,9 +27,10 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include(router.urls)),
     path("api/webhooks/<str:channel>/", InboundWebhookView.as_view(), name="inbound_webhook"),
+    path("api/callbacks/<str:channel>/", ProviderCallbackView.as_view(), name="provider_callback"),
     path("api/assistant/", AssistantView.as_view(), name="assistant"),
     path("health/", HealthcheckView.as_view(), name="healthcheck"),
-    path("metrics/", MetricsView.as_view(), name="metrics"),
+    path("api/metrics/", MetricsView.as_view(), name="metrics"),
     path("api/auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
 ]

@@ -142,10 +142,7 @@ export async function fetchBookings(): Promise<Booking[]> {
 }
 
 export async function fetchMetrics(): Promise<Record<string, number>> {
-  const headers: Record<string, string> = {};
-  if (authToken) headers.Authorization = `Bearer ${authToken}`;
-  if (orgId) headers["X-Org-ID"] = String(orgId);
-  const { data } = await axios.get("/metrics/", { headers });
+  const { data } = await api.get("/metrics/");
   return data;
 }
 
