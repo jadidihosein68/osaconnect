@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Routes, Route, useNavigate, useLocation, Navigate, useParams } from 'react-router-dom';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 import { ContactsList } from './components/contacts/ContactsList';
@@ -25,15 +26,12 @@ interface AppProps {
 
 export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [currentScreen, setCurrentScreen] = useState('dashboard');
-  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
-  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
-  const [selectedInboundId, setSelectedInboundId] = useState<string | null>(null);
-  const [isEditingTemplate, setIsEditingTemplate] = useState(false);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [orgId, setOrgId] = useState<number | null>(null);
   const [loadingMemberships, setLoadingMemberships] = useState(false);
+  const [ready, setReady] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogin = async (token: string) => {
     setAuth(token);
@@ -48,18 +46,10 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
         onAuthPersist?.(token, orgs[0].organization.id);
       }
       setIsLoggedIn(true);
+      navigate('/', { replace: true });
     } finally {
       setLoadingMemberships(false);
     }
-  };
-
-  const handleNavigate = (screen: string) => {
-    setCurrentScreen(screen);
-    setSelectedContactId(null);
-    setSelectedBookingId(null);
-    setSelectedInboundId(null);
-    setIsEditingTemplate(false);
-    setSelectedTemplateId(null);
   };
 
   const handleOrgChange = (org: number) => {
@@ -68,96 +58,86 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
     onOrgPersist?.(org);
   };
 
-  if (!isLoggedIn) {
-    return <Login onLogin={handleLogin} loading={loadingMemberships} memberships={memberships} />;
+  useEffect(() => {
+    const token = localStorage.getItem('corbi_token');
+    const storedOrg = localStorage.getItem('corbi_org');
+    const hydrate = async () => {
+      if (token) {
+        setAuth(token);
+        setIsLoggedIn(true);
+        setLoadingMemberships(true);
+        try {
+          const orgs = await fetchMemberships();
+          setMemberships(orgs);
+          const selectedOrg = storedOrg || (orgs[0]?.organization.id ? String(orgs[0].organization.id) : null);
+          if (selectedOrg) {
+            const orgNum = Number(selectedOrg);
+            setOrgId(orgNum);
+            setOrg(orgNum);
+            onAuthPersist?.(token, orgNum);
+            onOrgPersist?.(orgNum);
+          }
+        } catch {
+          setIsLoggedIn(false);
+        } finally {
+          setLoadingMemberships(false);
+        }
+      }
+      setReady(true);
+    };
+    hydrate();
+  }, [onAuthPersist, onOrgPersist]);
+
+  if (!ready) return null;
+  if (!isLoggedIn && location.pathname !== '/login') {
+    return <Navigate to="/login" replace />;
   }
 
-  const renderScreen = () => {
-    switch (currentScreen) {
-      case 'dashboard':
-        return <Dashboard onNavigate={handleNavigate} />;
-      case 'contacts':
-        return <ContactsList 
-          onViewContact={(id) => {
-            setSelectedContactId(id);
-            setCurrentScreen('contact-detail');
-          }}
-        />;
-      case 'contact-detail':
-        return <ContactDetail 
-          contactId={selectedContactId}
-          onBack={() => setCurrentScreen('contacts')}
-        />;
-      case 'send-message':
-        return <SendMessage />;
-      case 'campaign':
-        return <Campaign />;
-      case 'inbound-logs':
-        return <InboundLogs 
-          onViewDetail={(id) => {
-            setSelectedInboundId(id);
-            setCurrentScreen('inbound-detail');
-          }}
-        />;
-      case 'inbound-detail':
-        return <InboundDetail 
-          inboundId={selectedInboundId}
-          onBack={() => setCurrentScreen('inbound-logs')}
-        />;
-      case 'templates':
-        return <TemplateList 
-          onCreateTemplate={() => {
-            setIsEditingTemplate(true);
-            setSelectedTemplateId(null);
-            setCurrentScreen('template-editor');
-          }}
-          onEditTemplate={(id) => {
-            setIsEditingTemplate(true);
-            setSelectedTemplateId(id);
-            setCurrentScreen('template-editor');
-          }}
-        />;
-      case 'template-editor':
-        return <TemplateEditor 
-          templateId={selectedTemplateId}
-          onBack={() => setCurrentScreen('templates')}
-        />;
-      case 'ai-assistant':
-        return <AIAssistant />;
-      case 'bookings':
-        return <BookingList 
-          onViewBooking={(id) => {
-            setSelectedBookingId(id);
-            setCurrentScreen('booking-detail');
-          }}
-          onCreateBooking={() => setCurrentScreen('booking-detail')}
-        />;
-      case 'booking-detail':
-        return <BookingDetail 
-          bookingId={selectedBookingId}
-          onBack={() => setCurrentScreen('bookings')}
-        />;
-      case 'outbound-logs':
-        return <OutboundLogs />;
-      case 'monitoring':
-        return <MonitoringDashboard />;
-      case 'settings':
-        return <Settings />;
-      default:
-        return <Dashboard onNavigate={handleNavigate} />;
-    }
+  const ContactDetailPage = () => {
+    const params = useParams();
+    return <ContactDetail contactId={params.id || null} onBack={() => navigate('/contacts')} />;
+  };
+
+  const InboundDetailPage = () => {
+    const params = useParams();
+    return <InboundDetail inboundId={params.id || null} onBack={() => navigate('/inbound')} />;
+  };
+
+  const BookingDetailPage = () => {
+    const params = useParams();
+    return <BookingDetail bookingId={params.id || null} onBack={() => navigate('/bookings')} />;
   };
 
   return (
     <Layout 
-      currentScreen={currentScreen}
+      currentScreen={location.pathname}
       organizations={memberships.map((m) => m.organization)}
       currentOrgId={orgId}
       onOrgChange={handleOrgChange}
-      onNavigate={handleNavigate}
-      onLogout={() => setIsLoggedIn(false)}
+      onNavigate={(screen) => navigate(screen)}
+      onLogout={() => {
+        setIsLoggedIn(false);
+        navigate('/login', { replace: true });
+      }}
     >
-      {renderScreen()}
+      <Routes>
+        <Route path="/login" element={<Login onLogin={handleLogin} loading={loadingMemberships} memberships={memberships} />} />
+        <Route path="/" element={<Dashboard onNavigate={(path) => navigate(path)} orgId={orgId} isLoggedIn={isLoggedIn} />} />
+        <Route path="/contacts" element={<ContactsList onViewContact={(id) => navigate(`/contacts/${id}`)} />} />
+        <Route path="/contacts/:id" element={<ContactDetailPage />} />
+        <Route path="/templates" element={<TemplateList onCreateTemplate={() => navigate('/templates')} onEditTemplate={(id) => navigate(`/templates`)} />} />
+        <Route path="/messaging/send" element={<SendMessage />} />
+        <Route path="/messaging/campaign" element={<Campaign />} />
+        <Route path="/inbound" element={<InboundLogs onViewDetail={(id) => navigate(`/inbound/${id}`)} />} />
+        <Route path="/inbound/:id" element={<InboundDetailPage />} />
+        <Route path="/bookings" element={<BookingList onViewBooking={(id) => navigate(`/bookings/${id}`)} onCreateBooking={() => navigate('/bookings/new')} />} />
+        <Route path="/bookings/:id" element={<BookingDetailPage />} />
+        <Route path="/assistant" element={<AIAssistant />} />
+        <Route path="/monitoring/outbound" element={<OutboundLogs />} />
+        <Route path="/monitoring" element={<MonitoringDashboard />} />
+        <Route path="/settings" element={<Settings />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </Layout>
   );
 }

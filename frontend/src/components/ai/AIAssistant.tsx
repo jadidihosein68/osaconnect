@@ -4,6 +4,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Bot, Send, Copy, Save, MessageSquare, FileText } from 'lucide-react';
 import { Badge } from '../ui/badge';
+import { askAssistant } from '../../lib/api';
 
 export function AIAssistant() {
   const [query, setQuery] = useState('');
@@ -13,27 +14,23 @@ export function AIAssistant() {
       content: 'Hello! I\'m your AI assistant. I can help you with customer queries, draft messages, search the knowledge base, and more. How can I assist you today?'
     }
   ]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleAsk = () => {
+  const handleAsk = async () => {
     if (!query.trim()) return;
-
     setMessages([...messages, { type: 'user', content: query }]);
-    
-    // Simulate AI response
-    setTimeout(() => {
-      let response = '';
-      if (query.toLowerCase().includes('booking')) {
-        response = 'Based on our knowledge base, here are the booking policies:\n\n1. Customers can reschedule up to 24 hours before the appointment\n2. Cancellations after 24 hours may incur a fee\n3. Confirmations are sent automatically via WhatsApp\n\nWould you like me to draft a message about this?';
-      } else if (query.toLowerCase().includes('payment')) {
-        response = 'Our payment policies include:\n\n1. Payment is due within 7 days of invoice\n2. We accept credit cards, bank transfers, and digital wallets\n3. Late payments may incur a 5% fee\n\nShall I create a payment reminder template?';
-      } else {
-        response = 'I\'ve searched our knowledge base and found relevant information. Here\'s what I can tell you:\n\nBased on your query, I recommend checking our documentation on customer service policies. Would you like me to provide more specific information or help you draft a response?';
-      }
-      
-      setMessages(prev => [...prev, { type: 'assistant', content: response }]);
-    }, 1000);
-
-    setQuery('');
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await askAssistant(query);
+      setMessages((prev) => [...prev, { type: 'assistant', content: res.answer || 'No answer available' }]);
+    } catch {
+      setError('Failed to fetch answer');
+    } finally {
+      setLoading(false);
+      setQuery('');
+    }
   };
 
   const kbDocuments = [

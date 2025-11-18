@@ -1,12 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Textarea } from '../ui/textarea';
 import { Badge } from '../ui/badge';
 import { ArrowLeft, Save, Calendar, Send } from 'lucide-react';
+import { fetchBookings, Booking } from '../../lib/api';
 
 interface BookingDetailProps {
   bookingId: string | null;
@@ -15,23 +15,47 @@ interface BookingDetailProps {
 
 export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
   const [isEditing, setIsEditing] = useState(!bookingId);
+  const [booking, setBooking] = useState<Booking | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const booking = bookingId ? {
-    id: bookingId,
-    contact: 'John Smith',
-    contactId: '1',
-    service: 'Consultation',
-    date: '2024-11-18',
-    time: '14:00',
-    status: 'confirmed',
-    eventId: 'evt_abc123',
-    notes: 'Client requested afternoon slot. Prefers video call.',
-    createdDate: 'Nov 10, 2024',
-    notificationsSent: [
-      { type: 'confirmation', channel: 'WhatsApp', timestamp: 'Nov 10, 2024 3:45 PM' },
-      { type: 'reminder', channel: 'Email', timestamp: 'Nov 17, 2024 9:00 AM' },
-    ]
-  } : null;
+  useEffect(() => {
+    if (!bookingId) return;
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await fetchBookings();
+        const match = data.find((b) => String(b.id) === bookingId);
+        if (match) setBooking(match);
+        else setError('Booking not found');
+      } catch {
+        setError('Failed to load booking');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [bookingId]);
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'confirmed':
+        return 'bg-green-500';
+      case 'pending':
+        return 'bg-orange-500';
+      case 'rescheduled':
+        return 'bg-blue-500';
+      case 'cancelled':
+        return 'bg-red-500';
+      default:
+        return 'bg-gray-500';
+    }
+  };
+
+  if (loading) return <p className="p-6">Loading booking...</p>;
+  if (error) return <p className="p-6 text-red-600">{error}</p>;
+  if (!booking && bookingId) return <p className="p-6 text-gray-600">Booking not found</p>;
 
   return (
     <div className="p-6 space-y-6">
@@ -45,7 +69,7 @@ export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
               {bookingId ? 'Booking Details' : 'Create New Booking'}
             </h1>
             <p className="text-gray-600">
-              {bookingId ? `Event ID: ${booking?.eventId}` : 'Fill in the details below'}
+              {bookingId ? `Event ID: ${booking?.external_calendar_id || '-'}` : 'Fill in the details below'}
             </p>
           </div>
         </div>
@@ -73,150 +97,49 @@ export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
               <CardTitle>Booking Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Contact</Label>
-                <Select defaultValue={booking?.contactId || ''} disabled={!isEditing}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a contact" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">John Smith</SelectItem>
-                    <SelectItem value="2">Sarah Johnson</SelectItem>
-                    <SelectItem value="3">Mike Brown</SelectItem>
-                    <SelectItem value="4">Emily Davis</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Service</Label>
-                <Select defaultValue={booking?.service || ''} disabled={!isEditing}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a service" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Consultation">Consultation</SelectItem>
-                    <SelectItem value="Follow-up">Follow-up</SelectItem>
-                    <SelectItem value="Initial Meeting">Initial Meeting</SelectItem>
-                    <SelectItem value="Review">Review</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Date</Label>
-                  <Input
-                    type="date"
-                    defaultValue={booking?.date || ''}
-                    disabled={!isEditing}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Time</Label>
-                  <Input
-                    type="time"
-                    defaultValue={booking?.time || ''}
-                    disabled={!isEditing}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Notes</Label>
-                <Textarea
-                  defaultValue={booking?.notes || ''}
-                  disabled={!isEditing}
-                  rows={4}
-                  placeholder="Add any special notes or requirements..."
-                />
-              </div>
-
-              {!bookingId && (
-                <Button className="w-full" size="lg">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  Create Booking
-                </Button>
+              {booking && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Contact</Label>
+                    <Input value={booking.contact?.full_name || ''} disabled />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Start</Label>
+                      <Input
+                        type="datetime-local"
+                        value={booking.start_time ? booking.start_time.slice(0, 16) : ''}
+                        readOnly
+                        disabled={!isEditing}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>End</Label>
+                      <Input
+                        type="datetime-local"
+                        value={booking.end_time ? booking.end_time.slice(0, 16) : ''}
+                        readOnly
+                        disabled={!isEditing}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Notes</Label>
+                    <Textarea defaultValue={booking.notes || ''} disabled={!isEditing} rows={4} />
+                  </div>
+                </>
+              )}
+              {!booking && (
+                <div className="text-gray-600">Creation form is not implemented yet.</div>
               )}
             </CardContent>
           </Card>
 
-          {bookingId && booking && (
+          {booking && (
             <>
               <Card>
                 <CardHeader>
-                  <CardTitle>Reschedule or Cancel</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>New Date</Label>
-                      <Input type="date" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>New Time</Label>
-                      <Input type="time" />
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1">
-                      Reschedule Booking
-                    </Button>
-                    <Button variant="destructive" className="flex-1">
-                      Cancel Booking
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Notifications Sent</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {booking.notificationsSent.map((notification, index) => (
-                      <div key={index} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                        <Send className="w-5 h-5 text-green-600 mt-0.5" />
-                        <div className="flex-1">
-                          <div className="text-gray-900 capitalize">{notification.type}</div>
-                          <div className="text-gray-600">
-                            {notification.channel} • {notification.timestamp}
-                          </div>
-                        </div>
-                        <Badge className="bg-green-500 text-white">Sent</Badge>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </>
-          )}
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {bookingId && booking && (
-            <>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Status</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Badge className={`${
-                    booking.status === 'confirmed' ? 'bg-green-500' :
-                    booking.status === 'pending' ? 'bg-orange-500' :
-                    booking.status === 'rescheduled' ? 'bg-blue-500' :
-                    'bg-red-500'
-                  } text-white text-lg px-4 py-2`}>
-                    {booking.status.toUpperCase()}
-                  </Badge>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Quick Actions</CardTitle>
+                  <CardTitle>Notifications</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <Button className="w-full justify-start" variant="outline">
@@ -231,30 +154,40 @@ export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
               </Card>
             </>
           )}
+        </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {bookingId && booking ? (
-                <>
+        {/* Sidebar */}
+        <div className="space-y-6">
+          {booking && (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Status</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Badge className={`${getStatusColor(booking.status)} text-white text-lg px-4 py-2`}>
+                    {booking.status.toUpperCase()}
+                  </Badge>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
                   <div>
-                    <div className="text-gray-600 mb-1">Event ID</div>
-                    <div className="text-gray-900">{booking.eventId}</div>
+                    <div className="text-gray-600 mb-1">External Calendar ID</div>
+                    <div className="text-gray-900">{booking.external_calendar_id || '-'}</div>
                   </div>
                   <div>
-                    <div className="text-gray-600 mb-1">Created Date</div>
-                    <div className="text-gray-900">{booking.createdDate}</div>
+                    <div className="text-gray-600 mb-1">Location</div>
+                    <div className="text-gray-900">{booking.location || '-'}</div>
                   </div>
-                </>
-              ) : (
-                <div className="text-gray-600">
-                  Complete the form to create a new booking
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
       </div>
     </div>

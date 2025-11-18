@@ -1,7 +1,9 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Plus, Eye, Calendar as CalendarIcon } from 'lucide-react';
+import { fetchBookings, Booking } from '../../lib/api';
 
 interface BookingListProps {
   onViewBooking: (id: string) => void;
@@ -9,62 +11,25 @@ interface BookingListProps {
 }
 
 export function BookingList({ onViewBooking, onCreateBooking }: BookingListProps) {
-  const bookings = [
-    {
-      id: '1',
-      contact: 'John Smith',
-      service: 'Consultation',
-      date: 'Nov 18, 2024',
-      time: '2:00 PM',
-      status: 'confirmed',
-      eventId: 'evt_abc123',
-    },
-    {
-      id: '2',
-      contact: 'Sarah Johnson',
-      service: 'Follow-up',
-      date: 'Nov 18, 2024',
-      time: '3:30 PM',
-      status: 'confirmed',
-      eventId: 'evt_def456',
-    },
-    {
-      id: '3',
-      contact: 'Mike Brown',
-      service: 'Initial Meeting',
-      date: 'Nov 19, 2024',
-      time: '10:00 AM',
-      status: 'pending',
-      eventId: 'evt_ghi789',
-    },
-    {
-      id: '4',
-      contact: 'Emily Davis',
-      service: 'Review',
-      date: 'Nov 19, 2024',
-      time: '2:00 PM',
-      status: 'confirmed',
-      eventId: 'evt_jkl012',
-    },
-    {
-      id: '5',
-      contact: 'Robert Wilson',
-      service: 'Consultation',
-      date: 'Nov 20, 2024',
-      time: '11:00 AM',
-      status: 'rescheduled',
-      eventId: 'evt_mno345',
-    },
-    {
-      id: '6',
-      contact: 'Lisa Anderson',
-      service: 'Follow-up',
-      date: 'Nov 21, 2024',
-      time: '3:00 PM',
-      status: 'cancelled',
-      eventId: 'evt_pqr678',
-    },
-  ];
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await fetchBookings();
+        setBookings(data);
+      } catch {
+        setError('Failed to load bookings');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -138,6 +103,10 @@ export function BookingList({ onViewBooking, onCreateBooking }: BookingListProps
           <CardTitle>All Bookings ({bookings.length})</CardTitle>
         </CardHeader>
         <CardContent>
+          {error && <p className="text-red-600 text-sm mb-2">{error}</p>}
+          {loading ? (
+            <p>Loading bookings...</p>
+          ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -154,21 +123,21 @@ export function BookingList({ onViewBooking, onCreateBooking }: BookingListProps
               <tbody>
                 {bookings.map((booking) => (
                   <tr key={booking.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-4 text-gray-900">{booking.contact}</td>
-                    <td className="py-3 px-4 text-gray-600">{booking.service}</td>
-                    <td className="py-3 px-4 text-gray-600">{booking.date}</td>
-                    <td className="py-3 px-4 text-gray-600">{booking.time}</td>
+                    <td className="py-3 px-4 text-gray-900">{booking.contact?.full_name || '-'}</td>
+                    <td className="py-3 px-4 text-gray-600">{booking.title}</td>
+                    <td className="py-3 px-4 text-gray-600">{new Date(booking.start_time).toLocaleDateString()}</td>
+                    <td className="py-3 px-4 text-gray-600">{new Date(booking.start_time).toLocaleTimeString()}</td>
                     <td className="py-3 px-4">
                       <Badge className={`${getStatusColor(booking.status)} text-white capitalize`}>
                         {booking.status}
                       </Badge>
                     </td>
-                    <td className="py-3 px-4 text-gray-600">{booking.eventId}</td>
+                    <td className="py-3 px-4 text-gray-600">{booking.external_calendar_id || '-'}</td>
                     <td className="py-3 px-4">
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => onViewBooking(booking.id)}
+                        onClick={() => onViewBooking(String(booking.id))}
                       >
                         <Eye className="w-4 h-4" />
                       </Button>
@@ -178,6 +147,7 @@ export function BookingList({ onViewBooking, onCreateBooking }: BookingListProps
               </tbody>
             </table>
           </div>
+          )}
         </CardContent>
       </Card>
     </div>

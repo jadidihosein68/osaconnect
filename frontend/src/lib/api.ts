@@ -39,6 +39,10 @@ export interface OutboundMessage {
   body: string;
   status: string;
   retry_count: number;
+  trace_id?: string;
+  error?: string;
+  created_at: string;
+  updated_at: string;
   contact: Contact | null;
 }
 
@@ -57,6 +61,8 @@ export interface Booking {
   end_time: string;
   status: string;
   contact: Contact | null;
+  notes?: string;
+  location?: string;
 }
 
 let authToken = "";
@@ -77,6 +83,18 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401) {
+      localStorage.removeItem("corbi_token");
+      localStorage.removeItem("corbi_org");
+      window.location.href = "/login";
+    }
+    return Promise.reject(error);
+  },
+);
 
 export function setAuth(token: string, organization?: number) {
   authToken = token;
@@ -124,10 +142,10 @@ export async function fetchBookings(): Promise<Booking[]> {
 }
 
 export async function fetchMetrics(): Promise<Record<string, number>> {
-  const { data } = await axios.get("/metrics/", {
-    headers: orgId ? { "X-Org-ID": orgId } : {},
-    ...(authToken ? { headers: { Authorization: `Bearer ${authToken}`, "X-Org-ID": orgId } } : {}),
-  });
+  const headers: Record<string, string> = {};
+  if (authToken) headers.Authorization = `Bearer ${authToken}`;
+  if (orgId) headers["X-Org-ID"] = String(orgId);
+  const { data } = await axios.get("/metrics/", { headers });
   return data;
 }
 
@@ -139,4 +157,15 @@ export async function sendOutbound(payload: Partial<OutboundMessage> & { contact
 export async function askAssistant(question: string) {
   const { data } = await api.post("/assistant/", { question });
   return data;
+}
+
+export async function fetchDashboard() {
+  const [metrics, contacts, outbound, inbound, bookings] = await Promise.all([
+    fetchMetrics(),
+    fetchContacts(),
+    fetchOutbound(),
+    fetchInbound(),
+    fetchBookings(),
+  ]);
+  return { metrics, contacts, outbound, inbound, bookings };
 }

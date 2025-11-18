@@ -1,7 +1,9 @@
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { ArrowLeft, User, Plus } from 'lucide-react';
+import { fetchInbound, InboundMessage } from '../../lib/api';
 
 interface InboundDetailProps {
   inboundId: string | null;
@@ -9,26 +11,33 @@ interface InboundDetailProps {
 }
 
 export function InboundDetail({ inboundId, onBack }: InboundDetailProps) {
-  const message = {
-    id: inboundId || '1',
-    timestamp: '2 mins ago',
-    channel: 'WhatsApp',
-    sender: 'John Smith',
-    senderPhone: '+1 (555) 123-4567',
-    message: 'Hi, I have a question about my booking. Can you help me reschedule it to next week?',
-    status: 'matched',
-    contactId: '1',
-    rawPayload: {
-      from: '+15551234567',
-      to: '+15559876543',
-      message_id: 'msg_abc123def456',
-      timestamp: '2024-11-18T14:30:00Z',
-      type: 'text',
-      text: {
-        body: 'Hi, I have a question about my booking. Can you help me reschedule it to next week?'
+  const [message, setMessage] = useState<InboundMessage | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!inboundId) return;
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await fetchInbound();
+        const match = data.find((m) => String(m.id) === inboundId);
+        if (match) setMessage(match);
+        else setError('Inbound message not found');
+      } catch {
+        setError('Failed to load inbound message');
+      } finally {
+        setLoading(false);
       }
-    }
-  };
+    };
+    load();
+  }, [inboundId]);
+
+  if (!inboundId) return null;
+  if (loading) return <p className="p-6">Loading inbound...</p>;
+  if (error) return <p className="p-6 text-red-600">{error}</p>;
+  if (!message) return null;
 
   return (
     <div className="p-6 space-y-6">
@@ -38,7 +47,7 @@ export function InboundDetail({ inboundId, onBack }: InboundDetailProps) {
         </Button>
         <div>
           <h1 className="text-gray-900 mb-1">Inbound Message Detail</h1>
-          <p className="text-gray-600">{message.timestamp}</p>
+          <p className="text-gray-600">{new Date(message.received_at).toLocaleString()}</p>
         </div>
       </div>
 
@@ -56,7 +65,7 @@ export function InboundDetail({ inboundId, onBack }: InboundDetailProps) {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-gray-900">{message.message}</p>
+                <p className="text-gray-900">{String(message.payload?.text || message.payload?.message || '')}</p>
               </div>
             </CardContent>
           </Card>
@@ -70,11 +79,11 @@ export function InboundDetail({ inboundId, onBack }: InboundDetailProps) {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <div className="text-gray-600 mb-1">Sender Name</div>
-                  <div className="text-gray-900">{message.sender}</div>
+                  <div className="text-gray-900">{message.contact?.full_name || '-'}</div>
                 </div>
                 <div>
                   <div className="text-gray-600 mb-1">Phone Number</div>
-                  <div className="text-gray-900">{message.senderPhone}</div>
+                  <div className="text-gray-900">{message.contact?.phone_whatsapp || '-'}</div>
                 </div>
               </div>
               <div>
@@ -93,7 +102,7 @@ export function InboundDetail({ inboundId, onBack }: InboundDetailProps) {
               <details className="cursor-pointer">
                 <summary className="text-gray-600 mb-2">Click to expand</summary>
                 <pre className="bg-gray-900 text-green-400 p-4 rounded-lg overflow-x-auto text-sm">
-                  {JSON.stringify(message.rawPayload, null, 2)}
+                  {JSON.stringify(message.payload, null, 2)}
                 </pre>
               </details>
             </CardContent>
@@ -107,12 +116,12 @@ export function InboundDetail({ inboundId, onBack }: InboundDetailProps) {
               <CardTitle>Matched Contact</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {message.status === 'matched' ? (
+              {message.contact ? (
                 <>
                   <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
                     <User className="w-5 h-5 text-green-600" />
                     <div>
-                      <div className="text-green-900">{message.sender}</div>
+                      <div className="text-green-900">{message.contact.full_name}</div>
                       <div className="text-green-600">Existing Contact</div>
                     </div>
                   </div>
@@ -146,16 +155,16 @@ export function InboundDetail({ inboundId, onBack }: InboundDetailProps) {
             <CardContent className="space-y-3">
               <div>
                 <div className="text-gray-600 mb-1">Message ID</div>
-                <div className="text-gray-900 break-all">msg_abc123def456</div>
+                <div className="text-gray-900 break-all">{message.id}</div>
               </div>
               <div>
                 <div className="text-gray-600 mb-1">Received At</div>
-                <div className="text-gray-900">Nov 18, 2024 2:30 PM</div>
+                <div className="text-gray-900">{new Date(message.received_at).toLocaleString()}</div>
               </div>
               <div>
                 <div className="text-gray-600 mb-1">Status</div>
                 <Badge className="bg-green-500 text-white">
-                  {message.status === 'matched' ? 'Matched to Contact' : 'New Contact'}
+                  {message.contact ? 'Matched to Contact' : 'New Contact'}
                 </Badge>
               </div>
             </CardContent>

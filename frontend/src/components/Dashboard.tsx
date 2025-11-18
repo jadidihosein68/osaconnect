@@ -1,83 +1,89 @@
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Send, AlertCircle, Inbox, Calendar, Bot } from 'lucide-react';
 import { Button } from './ui/button';
+import { fetchDashboard } from '../lib/api';
 
 interface DashboardProps {
   onNavigate: (screen: string) => void;
+  orgId?: number | null;
+  isLoggedIn?: boolean;
 }
 
-export function Dashboard({ onNavigate }: DashboardProps) {
-  const stats = [
-    {
-      title: 'Outbound Messages Today',
-      value: '1,247',
-      icon: Send,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100',
-    },
-    {
-      title: 'Failed Messages',
-      value: '23',
-      icon: AlertCircle,
-      color: 'text-red-600',
-      bgColor: 'bg-red-100',
-    },
-    {
-      title: 'Inbound Captured',
-      value: '342',
-      icon: Inbox,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100',
-    },
-    {
-      title: 'Upcoming Bookings',
-      value: '18',
-      icon: Calendar,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100',
-    },
-  ];
+export function Dashboard({ onNavigate, orgId, isLoggedIn }: DashboardProps) {
+  const [stats, setStats] = useState<any[]>([]);
+  const [upcomingBookings, setUpcomingBookings] = useState<any[]>([]);
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const upcomingBookings = [
-    { id: 1, contact: 'John Smith', service: 'Consultation', time: 'Today, 2:00 PM', status: 'confirmed' },
-    { id: 2, contact: 'Sarah Johnson', service: 'Follow-up', time: 'Today, 3:30 PM', status: 'confirmed' },
-    { id: 3, contact: 'Mike Brown', service: 'Initial Meeting', time: 'Tomorrow, 10:00 AM', status: 'confirmed' },
-    { id: 4, contact: 'Emily Davis', service: 'Review', time: 'Tomorrow, 2:00 PM', status: 'pending' },
-  ];
+  useEffect(() => {
+    if (!isLoggedIn || !orgId) return;
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const { metrics, outbound, inbound, bookings } = await fetchDashboard();
+        setStats([
+          { title: 'Outbound Messages', value: metrics.outbound, icon: Send, color: 'text-blue-600', bgColor: 'bg-blue-100' },
+          { title: 'Failed Messages', value: metrics.failed, icon: AlertCircle, color: 'text-red-600', bgColor: 'bg-red-100' },
+          { title: 'Inbound Captured', value: metrics.inbound, icon: Inbox, color: 'text-green-600', bgColor: 'bg-green-100' },
+          { title: 'Bookings', value: metrics.bookings, icon: Calendar, color: 'text-purple-600', bgColor: 'bg-purple-100' },
+        ]);
+        setUpcomingBookings(bookings.slice(0, 4).map((b: any) => ({
+          id: b.id,
+          contact: b.contact?.full_name || 'Unknown',
+          service: b.title,
+          time: new Date(b.start_time).toLocaleString(),
+          status: b.status,
+        })));
+        setRecentActivity([
+          ...outbound.slice(0, 2).map((o: any) => ({ id: `out-${o.id}`, type: 'outbound', message: (o.body || '').slice(0, 80), time: new Date(o.created_at).toLocaleTimeString(), status: o.status === 'failed' ? 'error' : 'success' })),
+          ...inbound.slice(0, 2).map((i: any) => ({ id: `in-${i.id}`, type: 'inbound', message: String(i.payload?.text || i.payload?.message || ''), time: new Date(i.received_at).toLocaleTimeString(), status: 'new' })),
+        ]);
+      } catch {
+        setError('Failed to load dashboard data. Ensure you are logged in and an organization is selected.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [isLoggedIn, orgId]);
 
-  const recentActivity = [
-    { id: 1, type: 'outbound', message: 'WhatsApp campaign sent to 150 contacts', time: '10 mins ago', status: 'success' },
-    { id: 2, type: 'inbound', message: 'New message from John Smith', time: '25 mins ago', status: 'new' },
-    { id: 3, type: 'booking', message: 'Sarah Johnson confirmed booking', time: '1 hour ago', status: 'success' },
-    { id: 4, type: 'failed', message: '5 messages failed to deliver', time: '2 hours ago', status: 'error' },
-  ];
+  const showGuard = !isLoggedIn || !orgId;
 
   return (
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-gray-900 mb-2">Dashboard</h1>
         <p className="text-gray-600">Welcome back! Here's what's happening today.</p>
+        {error && <p className="text-red-600 text-sm">{error}</p>}
+        {showGuard && <p className="text-amber-600 text-sm">Login and select an organization to load data.</p>}
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat) => (
-          <Card key={stat.title}>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 mb-1">{stat.title}</p>
-                  <p className="text-gray-900">{stat.value}</p>
+      {loading ? (
+        <p>Loading dashboard...</p>
+      ) : showGuard ? null : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {stats.map((stat) => (
+            <Card key={stat.title}>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 mb-1">{stat.title}</p>
+                    <p className="text-gray-900">{stat.value}</p>
+                  </div>
+                  <div className={`w-12 h-12 ${stat.bgColor} rounded-lg flex items-center justify-center`}>
+                    <stat.icon className={`w-6 h-6 ${stat.color}`} />
+                  </div>
                 </div>
-                <div className={`w-12 h-12 ${stat.bgColor} rounded-lg flex items-center justify-center`}>
-                  <stat.icon className={`w-6 h-6 ${stat.color}`} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
+      {!showGuard && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* AI Assistant Quick Access */}
         <Card>
@@ -88,22 +94,12 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-gray-600">
-              Get instant answers and automate tasks with your AI assistant.
-            </p>
+            <p className="text-gray-600">Get instant answers and automate tasks with your AI assistant.</p>
             <div className="space-y-2">
-              <Button 
-                onClick={() => onNavigate('ai-assistant')} 
-                className="w-full justify-start"
-                variant="outline"
-              >
+              <Button onClick={() => onNavigate('/assistant')} className="w-full justify-start" variant="outline">
                 Ask a question
               </Button>
-              <Button 
-                onClick={() => onNavigate('ai-assistant')} 
-                className="w-full justify-start"
-                variant="outline"
-              >
+              <Button onClick={() => onNavigate('/assistant')} className="w-full justify-start" variant="outline">
                 Browse knowledge base
               </Button>
             </div>
@@ -118,7 +114,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                 <Calendar className="w-5 h-5 text-purple-600" />
                 Upcoming Bookings
               </CardTitle>
-              <Button variant="ghost" size="sm" onClick={() => onNavigate('bookings')}>
+              <Button variant="ghost" size="sm" onClick={() => onNavigate('/bookings')}>
                 View all
               </Button>
             </div>
@@ -141,10 +137,12 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                   </div>
                 </div>
               ))}
+              {upcomingBookings.length === 0 && <div className="text-gray-600 text-sm">No upcoming bookings</div>}
             </div>
           </CardContent>
         </Card>
       </div>
+      )}
 
       {/* Recent Activity */}
       <Card>
@@ -155,17 +153,20 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           <div className="space-y-4">
             {recentActivity.map((activity) => (
               <div key={activity.id} className="flex items-start gap-4">
-                <div className={`w-2 h-2 rounded-full mt-2 ${
-                  activity.status === 'success' ? 'bg-green-500' :
-                  activity.status === 'error' ? 'bg-red-500' :
-                  'bg-blue-500'
-                }`} />
+                <div
+                  className={`w-2 h-2 rounded-full mt-2 ${
+                    activity.status === 'success' ? 'bg-green-500' :
+                    activity.status === 'error' ? 'bg-red-500' :
+                    'bg-blue-500'
+                  }`}
+                />
                 <div className="flex-1">
-                  <div className="text-gray-900">{activity.message}</div>
+                  <div className="text-gray-900">{activity.message || 'No message'}</div>
                   <div className="text-gray-500">{activity.time}</div>
                 </div>
               </div>
             ))}
+            {recentActivity.length === 0 && <div className="text-gray-600 text-sm">No recent activity</div>}
           </div>
         </CardContent>
       </Card>

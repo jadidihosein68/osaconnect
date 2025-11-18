@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Search, Eye, Image, FileText } from 'lucide-react';
 import { Badge } from '../ui/badge';
+import { fetchInbound, InboundMessage } from '../../lib/api';
 
 interface InboundLogsProps {
   onViewDetail: (id: string) => void;
@@ -13,63 +14,43 @@ interface InboundLogsProps {
 export function InboundLogs({ onViewDetail }: InboundLogsProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [channelFilter, setChannelFilter] = useState('all');
+  const [logs, setLogs] = useState<InboundMessage[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const logs = [
-    {
-      id: '1',
-      timestamp: '2 mins ago',
-      channel: 'WhatsApp',
-      sender: 'John Smith',
-      message: 'Hi, I have a question about my booking',
-      hasMedia: false,
-      status: 'matched',
-    },
-    {
-      id: '2',
-      timestamp: '15 mins ago',
-      channel: 'Email',
-      sender: 'sarah.j@email.com',
-      message: 'Thank you for the information regarding...',
-      hasMedia: false,
-      status: 'matched',
-    },
-    {
-      id: '3',
-      timestamp: '1 hour ago',
-      channel: 'Telegram',
-      sender: '@mikeb',
-      message: 'When is my next appointment?',
-      hasMedia: false,
-      status: 'matched',
-    },
-    {
-      id: '4',
-      timestamp: '2 hours ago',
-      channel: 'WhatsApp',
-      sender: '+1 (555) 999-8888',
-      message: 'Hello, I would like to book a service',
-      hasMedia: true,
-      status: 'new',
-    },
-    {
-      id: '5',
-      timestamp: '3 hours ago',
-      channel: 'Instagram',
-      sender: '@emily_davis',
-      message: 'Can you send me more details?',
-      hasMedia: false,
-      status: 'matched',
-    },
-    {
-      id: '6',
-      timestamp: '5 hours ago',
-      channel: 'WhatsApp',
-      sender: 'Robert Wilson',
-      message: 'Thanks for your help!',
-      hasMedia: false,
-      status: 'matched',
-    },
-  ];
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await fetchInbound();
+        setLogs(data);
+      } catch {
+        setError('Failed to load inbound messages');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const filtered = useMemo(
+    () =>
+      logs.filter((log) => {
+        const matchesChannel = channelFilter === 'all' ? true : log.channel === channelFilter;
+        const sender =
+          log.contact?.full_name ||
+          log.contact?.email ||
+          log.contact?.phone_whatsapp ||
+          (log.payload?.sender as string) ||
+          '';
+        const matchesSearch =
+          sender.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          JSON.stringify(log.payload || {}).toLowerCase().includes(searchQuery.toLowerCase());
+        return matchesChannel && matchesSearch;
+      }),
+    [logs, channelFilter, searchQuery],
+  );
 
   const getChannelColor = (channel: string) => {
     switch (channel) {
@@ -129,9 +110,13 @@ export function InboundLogs({ onViewDetail }: InboundLogsProps) {
       {/* Messages Table */}
       <Card>
         <CardHeader>
-          <CardTitle>All Inbound Messages ({logs.length})</CardTitle>
+          <CardTitle>All Inbound Messages ({filtered.length})</CardTitle>
         </CardHeader>
         <CardContent>
+          {error && <p className="text-red-600 text-sm">{error}</p>}
+          {loading ? (
+            <p>Loading inbound...</p>
+          ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -146,20 +131,22 @@ export function InboundLogs({ onViewDetail }: InboundLogsProps) {
                 </tr>
               </thead>
               <tbody>
-                {logs.map((log) => (
+                {filtered.map((log) => (
                   <tr key={log.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-4 text-gray-600">{log.timestamp}</td>
+                    <td className="py-3 px-4 text-gray-600">{new Date(log.received_at).toLocaleString()}</td>
                     <td className="py-3 px-4">
                       <Badge className={getChannelColor(log.channel)}>
                         {log.channel}
                       </Badge>
                     </td>
-                    <td className="py-3 px-4 text-gray-900">{log.sender}</td>
+                    <td className="py-3 px-4 text-gray-900">
+                      {log.contact?.full_name || log.contact?.email || log.contact?.phone_whatsapp || '-'}
+                    </td>
                     <td className="py-3 px-4 text-gray-600 max-w-md truncate">
-                      {log.message}
+                      {String(log.payload?.text || log.payload?.message || '')}
                     </td>
                     <td className="py-3 px-4">
-                      {log.hasMedia && (
+                      {log.payload?.media_url && (
                         <Image className="w-4 h-4 text-gray-400" />
                       )}
                     </td>
@@ -182,6 +169,7 @@ export function InboundLogs({ onViewDetail }: InboundLogsProps) {
               </tbody>
             </table>
           </div>
+          )}
         </CardContent>
       </Card>
     </div>
