@@ -141,8 +141,23 @@ export async function fetchBookings(): Promise<Booking[]> {
   return data;
 }
 
+export async function fetchMonitoringSummary(): Promise<{ totals: Record<string, number>; success_rate: number; average_response_ms: number | null }> {
+  const { data } = await api.get("/monitoring/summary/");
+  return data;
+}
+
 export async function fetchMetrics(): Promise<Record<string, number>> {
   const { data } = await api.get("/metrics/");
+  return data;
+}
+
+export async function createBooking(payload: { contact_id: number; title: string; start_time: string; end_time: string; status?: string; notes?: string; location?: string }) {
+  const { data } = await api.post("/bookings/", payload);
+  return data;
+}
+
+export async function updateBooking(id: number, payload: Partial<{ title: string; start_time: string; end_time: string; status: string; notes: string; location: string }>) {
+  const { data } = await api.patch(`/bookings/${id}/`, payload);
   return data;
 }
 

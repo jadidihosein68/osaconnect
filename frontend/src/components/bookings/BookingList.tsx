@@ -6,6 +6,7 @@ import { Plus, Eye, Calendar as CalendarIcon } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { fetchBookings, Booking } from '../../lib/api';
+import { CreateBookingForm } from './CreateBookingForm';
 
 interface BookingListProps {
   onViewBooking: (id: string) => void;
@@ -78,6 +79,11 @@ export function BookingList({ onViewBooking, onCreateBooking }: BookingListProps
           Create Booking
         </Button>
       </div>
+      <CreateBookingForm onCreated={() => {
+        // refresh list after creation
+        setLoading(true);
+        fetchBookings().then(setBookings).catch(() => setError('Failed to load bookings')).finally(() => setLoading(false));
+      }} />
 
       {/* Calendar View (Simplified) */}
       <Card>

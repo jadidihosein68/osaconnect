@@ -3,7 +3,7 @@ from __future__ import annotations
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import OutboundMessage
+from .models import OutboundMessage, Suppression
 
 
 class ProviderCallbackView(APIView):
@@ -33,6 +33,21 @@ class ProviderCallbackView(APIView):
             msg.provider_status = status
             msg.error = payload.get("error") or msg.error
             msg.save(update_fields=["status", "provider_status", "error", "updated_at"])
+            # record suppression on hard failure/bounce
+            identifier = (
+                msg.contact.phone_whatsapp
+                or msg.contact.email
+                or msg.contact.telegram_chat_id
+                or msg.contact.instagram_scoped_id
+                or ""
+            )
+            if identifier:
+                Suppression.objects.get_or_create(
+                    organization=msg.organization,
+                    channel=msg.channel,
+                    identifier=identifier,
+                    defaults={"reason": status},
+                )
             return Response({"status": "failed"})
 
         return Response({"status": "ignored", "reason": "unhandled status"}, status=202)

@@ -31,6 +31,21 @@ def send_outbound_message(self, outbound_id: int):
         message.save(update_fields=["status", "error", "updated_at"])
         return
 
+    destination = (
+        message.contact.phone_whatsapp
+        if message.channel == "whatsapp"
+        else message.contact.email
+        if message.channel == "email"
+        else message.contact.telegram_chat_id
+        if message.channel == "telegram"
+        else message.contact.instagram_scoped_id
+    )
+    if not destination:
+        message.status = OutboundMessage.STATUS_FAILED
+        message.error = "Missing destination identifier for contact."
+        message.save(update_fields=["status", "error", "updated_at"])
+        return
+
     # simple throttling: limit per minute per channel
     throttle_limit = int(getattr(settings, "OUTBOUND_PER_MINUTE_LIMIT", 60))
     one_minute_ago = timezone.now() - timezone.timedelta(minutes=1)
@@ -42,9 +57,7 @@ def send_outbound_message(self, outbound_id: int):
         return
 
     # suppression check
-    suppressed = Suppression.objects.filter(
-        organization=message.organization, channel=message.channel, identifier=destination
-    ).exists()
+    suppressed = Suppression.objects.filter(organization=message.organization, channel=message.channel, identifier=destination).exists()
     if suppressed:
         message.status = OutboundMessage.STATUS_FAILED
         message.error = "Suppressed recipient"
@@ -52,19 +65,7 @@ def send_outbound_message(self, outbound_id: int):
         return
 
     try:
-        sender = get_sender(message.channel)
-        destination = (
-            message.contact.phone_whatsapp
-            if message.channel == "whatsapp"
-            else message.contact.email
-            if message.channel == "email"
-            else message.contact.telegram_chat_id
-            if message.channel == "telegram"
-            else message.contact.instagram_scoped_id
-        )
-        if not destination:
-            raise ValueError("Missing destination identifier for contact.")
-
+        sender = get_sender(message.channel, organization=message.organization)
         result = sender.send(to=destination, body=message.body, media_url=message.media_url)
         if not result.success:
             message.status = OutboundMessage.STATUS_FAILED

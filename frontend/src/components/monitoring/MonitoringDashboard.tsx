@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { fetchMetrics, fetchOutbound } from '../../lib/api';
+import { fetchMonitoringSummary, fetchOutbound } from '../../lib/api';
 
 export function MonitoringDashboard() {
-  const [metrics, setMetrics] = useState<Record<string, number> | null>(null);
+  const [summary, setSummary] = useState<{ totals: Record<string, number>; success_rate: number; average_response_ms: number | null } | null>(null);
   const [outbound, setOutbound] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -14,8 +14,8 @@ export function MonitoringDashboard() {
       setLoading(true);
       setError(null);
       try {
-        const [m, o] = await Promise.all([fetchMetrics(), fetchOutbound()]);
-        setMetrics(m);
+        const [m, o] = await Promise.all([fetchMonitoringSummary(), fetchOutbound()]);
+        setSummary(m);
         setOutbound(o);
       } catch {
         setError('Failed to load monitoring data');
@@ -36,10 +36,10 @@ export function MonitoringDashboard() {
     return Object.entries(grouped).map(([date, messages]) => ({ date, messages }));
   }, [outbound]);
 
-  const successRate = metrics && metrics.outbound ? (((metrics.outbound - metrics.failed) / metrics.outbound) * 100).toFixed(1) + '%' : '—';
-  const failedMessages = metrics?.failed ?? '—';
-  const totalToday = metrics?.outbound ?? '—';
-  const avgResponseTime = '—'; // placeholder until callbacks include timing
+  const successRate = summary ? `${summary.success_rate.toFixed(1)}%` : '—';
+  const failedMessages = summary?.totals?.failed_today ?? '—';
+  const totalToday = summary?.totals?.outbound_today ?? '—';
+  const avgResponseTime = summary?.average_response_ms ? `${summary.average_response_ms} ms` : '—';
 
   const failureReasons = outbound
     .filter((o) => o.status === 'failed' && o.error)

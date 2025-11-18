@@ -6,7 +6,7 @@ import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Badge } from '../ui/badge';
 import { ArrowLeft, Save, Calendar, Send } from 'lucide-react';
-import { fetchBookings, Booking } from '../../lib/api';
+import { fetchBookings, Booking, updateBooking } from '../../lib/api';
 
 interface BookingDetailProps {
   bookingId: string | null;
@@ -18,6 +18,14 @@ export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
   const [booking, setBooking] = useState<Booking | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    title: '',
+    start_time: '',
+    end_time: '',
+    status: '',
+    notes: '',
+    location: '',
+  });
 
   useEffect(() => {
     if (!bookingId) return;
@@ -27,7 +35,17 @@ export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
       try {
         const data = await fetchBookings();
         const match = data.find((b) => String(b.id) === bookingId);
-        if (match) setBooking(match);
+        if (match) {
+          setBooking(match);
+          setForm({
+            title: match.title || '',
+            start_time: match.start_time ? match.start_time.slice(0, 16) : '',
+            end_time: match.end_time ? match.end_time.slice(0, 16) : '',
+            status: match.status || 'pending',
+            notes: match.notes || '',
+            location: match.location || '',
+          });
+        }
         else setError('Booking not found');
       } catch {
         setError('Failed to load booking');
@@ -37,6 +55,28 @@ export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
     };
     load();
   }, [bookingId]);
+
+  const handleSave = async () => {
+    if (!booking) return;
+    setError(null);
+    setLoading(true);
+    try {
+      const updated = await updateBooking(booking.id, {
+        title: form.title,
+        start_time: form.start_time,
+        end_time: form.end_time,
+        status: form.status,
+        notes: form.notes,
+        location: form.location,
+      });
+      setBooking({ ...booking, ...updated });
+      setIsEditing(false);
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || 'Failed to update booking');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -76,9 +116,9 @@ export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
         {bookingId && (
           <div className="flex gap-2">
             {isEditing ? (
-              <Button onClick={() => setIsEditing(false)}>
+              <Button onClick={handleSave} disabled={loading}>
                 <Save className="w-4 h-4 mr-2" />
-                Save Changes
+                {loading ? 'Saving...' : 'Save Changes'}
               </Button>
             ) : (
               <Button variant="outline" onClick={() => setIsEditing(true)}>
@@ -89,7 +129,7 @@ export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
         )}
       </div>
 
-         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Booking Details */}
         <div className="lg:col-span-2 space-y-6">
           <Card>
@@ -108,8 +148,8 @@ export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
                       <Label>Start</Label>
                       <Input
                         type="datetime-local"
-                        value={booking.start_time ? booking.start_time.slice(0, 16) : ''}
-                        readOnly
+                        value={form.start_time}
+                        onChange={(e) => setForm((f) => ({ ...f, start_time: e.target.value }))}
                         disabled={!isEditing}
                       />
                     </div>
@@ -117,15 +157,23 @@ export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
                       <Label>End</Label>
                       <Input
                         type="datetime-local"
-                        value={booking.end_time ? booking.end_time.slice(0, 16) : ''}
-                        readOnly
+                        value={form.end_time}
+                        onChange={(e) => setForm((f) => ({ ...f, end_time: e.target.value }))}
                         disabled={!isEditing}
                       />
                     </div>
                   </div>
                   <div className="space-y-2">
+                    <Label>Status</Label>
+                    <Input
+                      value={form.status}
+                      onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
+                      disabled={!isEditing}
+                    />
+                  </div>
+                  <div className="space-y-2">
                     <Label>Notes</Label>
-                    <Textarea defaultValue={booking.notes || ''} disabled={!isEditing} rows={4} />
+                    <Textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} disabled={!isEditing} rows={4} />
                   </div>
                 </>
               )}

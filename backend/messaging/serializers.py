@@ -61,6 +61,10 @@ class OutboundMessageSerializer(serializers.ModelSerializer):
             allowed_ext = (".jpg", ".jpeg", ".png", ".pdf", ".mp4", ".mp3")
             if not parsed.path.lower().endswith(allowed_ext):
                 raise serializers.ValidationError("Media type not allowed; allowed: jpg, png, pdf, mp4, mp3.")
+        # suppression check handled in task, but short-circuit here
+        from .models import Suppression
+        if Suppression.objects.filter(organization=contact.organization, channel=channel, identifier=destination).exists():
+            raise serializers.ValidationError("Recipient is suppressed for this channel.")
         return attrs
 
     def create(self, validated_data):

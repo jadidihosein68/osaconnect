@@ -7,11 +7,13 @@ from rest_framework.response import Response
 from .models import MessageTemplate
 from .serializers import MessageTemplateSerializer
 from organizations.utils import get_current_org
+from organizations.permissions import IsOrgMemberWithRole
 
 
 class MessageTemplateViewSet(viewsets.ModelViewSet):
     queryset = MessageTemplate.objects.all()
     serializer_class = MessageTemplateSerializer
+    permission_classes = [IsOrgMemberWithRole]
     filter_backends = [filters.SearchFilter]
     search_fields = ["name", "channel", "category"]
 

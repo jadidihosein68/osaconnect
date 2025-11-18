@@ -26,6 +26,7 @@ class Booking(models.Model):
     notes = models.TextField(blank=True, default="")
     external_calendar_id = models.CharField(max_length=120, blank=True, default="")
     created_by = models.CharField(max_length=120, blank=True, default="system")
+    created_by_user = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="created_bookings")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

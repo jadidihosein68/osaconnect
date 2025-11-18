@@ -7,11 +7,13 @@ from rest_framework.response import Response
 from .models import Contact
 from .serializers import ContactSerializer, IdentityConflictSerializer
 from organizations.utils import get_current_org
+from organizations.permissions import IsOrgMemberWithRole
 
 
 class ContactViewSet(viewsets.ModelViewSet):
     queryset = Contact.objects.all()
     serializer_class = ContactSerializer
+    permission_classes = [IsOrgMemberWithRole]
     filter_backends = [filters.SearchFilter]
     search_fields = ["full_name", "email", "phone_whatsapp", "telegram_chat_id", "instagram_scoped_id", "tags"]
 

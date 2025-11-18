@@ -14,6 +14,10 @@ def get_current_org(request) -> Organization:
 
     org_id = request.headers.get("X-Org-ID") or request.META.get("HTTP_X_ORG_ID")
     if not org_id:
+        # fallback: if user has exactly one membership, use it to reduce UX friction
+        memberships = Membership.objects.filter(user=request.user)
+        if memberships.count() == 1:
+            return memberships.first().organization
         raise PermissionDenied("X-Org-ID header is required.")
 
     try:
