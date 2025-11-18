@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 import requests
+from twilio.rest import Client as TwilioClient
 
 from organizations.utils import get_current_org
 from organizations.permissions import IsOrgAdmin
@@ -33,17 +34,17 @@ def _validate_with_provider(provider: str, token: str, extra: dict) -> tuple[boo
             data = resp.json() if resp.ok else {}
             return (bool(data.get("ok")), f"Telegram status {resp.status_code}")
         if provider == "whatsapp":
-            phone_id = extra.get("phone_number_id")
-            if not phone_id:
-                return (False, "phone_number_id is required for WhatsApp test")
-            headers["Authorization"] = f"Bearer {token}"
-            resp = requests.get(
-                f"https://graph.facebook.com/v20.0/{phone_id}",
-                headers=headers,
-                params={"fields": "id"},
-                timeout=timeout,
-            )
-            return (resp.status_code == 200, f"WhatsApp status {resp.status_code}")
+            account_sid = extra.get("account_sid")
+            from_whatsapp = extra.get("from_whatsapp")
+            to_whatsapp = extra.get("to_whatsapp")
+            if not all([account_sid, from_whatsapp, to_whatsapp]):
+                return (False, "account_sid, from_whatsapp, and to_whatsapp are required for WhatsApp test")
+            try:
+                client = TwilioClient(account_sid, token)
+                msg = client.messages.create(from_=f"whatsapp:{from_whatsapp}", to=f"whatsapp:{to_whatsapp}", body="Hello !")
+                return (bool(msg.sid), "WhatsApp message sent")
+            except Exception as exc:
+                return (False, f"WhatsApp test failed: {exc}")
         if provider == "instagram":
             resp = requests.get(
                 "https://graph.facebook.com/me",

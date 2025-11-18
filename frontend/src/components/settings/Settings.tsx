@@ -20,10 +20,12 @@ export function Settings() {
     { name: string; fields: { key: string; label: string; type?: string }[] }
   > = {
     whatsapp: {
-      name: 'WhatsApp Business API',
+      name: 'WhatsApp Business (Twilio)',
       fields: [
-        { key: 'token', label: 'Access Token', type: 'password' },
-        { key: 'phone_number_id', label: 'Phone Number ID' },
+        { key: 'token', label: 'Auth Token', type: 'password' },
+        { key: 'account_sid', label: 'Account SID' },
+        { key: 'from_whatsapp', label: 'From WhatsApp (+...)' },
+        { key: 'to_whatsapp', label: 'To WhatsApp (+...)' },
       ],
     },
     sendgrid: {
