@@ -28,6 +28,7 @@ Key endpoints:
 - `/api/inbound/` read-only log
 - `/api/bookings/` scheduling
 - `/api/assistant/` KB-backed stub
+- `/api/auth/token/` obtain JWT (SimpleJWT) and `/api/auth/token/refresh/`
 - `/health/` service diagnostics
 
 ### Frontend (React + Tailwind + Vite)
@@ -42,3 +43,4 @@ The frontend is intentionally lightweight to demonstrate flows across messaging,
 - SQLite is the default DB; swap `DATABASES` in `backend/corbi/settings.py` for MySQL later.
 - Celery is configured to run eagerly by default for ease of local dev; set `CELERY_TASK_ALWAYS_EAGER=false` for async workers.
 - Knowledge base lives in `backend/knowledge_base.md`; plug an LLM provider in `assistant/views.py`.
+- Authentication defaults to JWT (SimpleJWT) + session auth. Create a user (`createsuperuser`) and obtain a token via `/api/auth/token/`. Pass `Authorization: Bearer <token>` on API calls.

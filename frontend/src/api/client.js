@@ -1,7 +1,16 @@
 import axios from "axios";
+import { getAuthToken } from "./token";
 
 export const api = axios.create({
   baseURL: "/api",
+});
+
+api.interceptors.request.use((config) => {
+  const token = getAuthToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 export async function getContacts() {
@@ -36,5 +45,10 @@ export async function createOutboundMessage(payload) {
 
 export async function askAssistant(question) {
   const { data } = await api.post("/assistant/", { question });
+  return data;
+}
+
+export async function login(username, password) {
+  const { data } = await api.post("/auth/token/", { username, password });
   return data;
 }

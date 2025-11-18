@@ -4,7 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { getContacts } from "../api/client";
 
 export default function ContactsPage() {
-  const { data, isLoading } = useQuery({ queryKey: ["contacts"], queryFn: getContacts });
+  const { data, isLoading, error } = useQuery({ queryKey: ["contacts"], queryFn: getContacts });
+  const rows = Array.isArray(data) ? data : [];
 
   return (
     <section className="space-y-4">
@@ -12,6 +13,7 @@ export default function ContactsPage() {
         <h1 className="text-xl font-semibold text-slate-900">Contacts</h1>
         <p className="text-sm text-slate-600">Identity management with opt-out status and dedupe rules.</p>
       </div>
+      {error && <p className="text-sm text-red-600">Failed to load contacts.</p>}
       {isLoading ? (
         <p>Loading contacts…</p>
       ) : (
@@ -26,7 +28,7 @@ export default function ContactsPage() {
               </tr>
             </thead>
             <tbody>
-              {data?.map((c) => (
+              {rows.map((c) => (
                 <tr key={c.id} className="border-t">
                   <td className="px-3 py-2">{c.full_name}</td>
                   <td className="px-3 py-2">{c.email || "—"}</td>

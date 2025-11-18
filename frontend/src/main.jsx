@@ -10,6 +10,8 @@ import TemplatesPage from "./pages/TemplatesPage";
 import MessagingPage from "./pages/MessagingPage";
 import BookingsPage from "./pages/BookingsPage";
 import AssistantPage from "./pages/AssistantPage";
+import LoginPage from "./pages/LoginPage";
+import { AuthProvider, useAuth } from "./auth/useAuth.jsx";
 
 const queryClient = new QueryClient();
 
@@ -26,21 +28,82 @@ const NavBar = () => (
   </nav>
 );
 
+const Authenticated = ({ children }) => {
+  const { isAuthenticated } = useAuth();
+  if (!isAuthenticated) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-8 text-center space-y-3">
+        <p className="text-lg font-semibold text-slate-900">Authentication required</p>
+        <p className="text-slate-600">Please log in to access Corbi.</p>
+        <Link className="text-indigo-600 underline" to="/login">
+          Go to login
+        </Link>
+      </div>
+    );
+  }
+  return children;
+};
+
 const AppShell = () => (
   <BrowserRouter>
-    <QueryClientProvider client={queryClient}>
-      <NavBar />
-      <main className="max-w-6xl mx-auto px-4 pb-12">
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/contacts" element={<ContactsPage />} />
-          <Route path="/templates" element={<TemplatesPage />} />
-          <Route path="/messaging" element={<MessagingPage />} />
-          <Route path="/bookings" element={<BookingsPage />} />
-          <Route path="/assistant" element={<AssistantPage />} />
-        </Routes>
-      </main>
-    </QueryClientProvider>
+    <AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <NavBar />
+        <main className="max-w-6xl mx-auto px-4 pb-12">
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route
+              path="/"
+              element={
+                <Authenticated>
+                  <Dashboard />
+                </Authenticated>
+              }
+            />
+            <Route
+              path="/contacts"
+              element={
+                <Authenticated>
+                  <ContactsPage />
+                </Authenticated>
+              }
+            />
+            <Route
+              path="/templates"
+              element={
+                <Authenticated>
+                  <TemplatesPage />
+                </Authenticated>
+              }
+            />
+            <Route
+              path="/messaging"
+              element={
+                <Authenticated>
+                  <MessagingPage />
+                </Authenticated>
+              }
+            />
+            <Route
+              path="/bookings"
+              element={
+                <Authenticated>
+                  <BookingsPage />
+                </Authenticated>
+              }
+            />
+            <Route
+              path="/assistant"
+              element={
+                <Authenticated>
+                  <AssistantPage />
+                </Authenticated>
+              }
+            />
+          </Routes>
+        </main>
+      </QueryClientProvider>
+    </AuthProvider>
   </BrowserRouter>
 );
 

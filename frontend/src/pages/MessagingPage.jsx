@@ -4,8 +4,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createOutboundMessage, getContacts, getOutboundMessages } from "../api/client";
 
 export default function MessagingPage() {
-  const { data: contacts } = useQuery({ queryKey: ["contacts"], queryFn: getContacts });
+  const { data: contactsRaw } = useQuery({ queryKey: ["contacts"], queryFn: getContacts });
+  const contacts = Array.isArray(contactsRaw) ? contactsRaw : [];
   const outbound = useQuery({ queryKey: ["outbound"], queryFn: getOutboundMessages });
+  const outboundRows = Array.isArray(outbound.data) ? outbound.data : [];
   const queryClient = useQueryClient();
   const [message, setMessage] = useState({ contact_id: "", channel: "whatsapp", body: "" });
 
@@ -39,7 +41,7 @@ export default function MessagingPage() {
               onChange={(e) => setMessage((m) => ({ ...m, contact_id: e.target.value }))}
             >
               <option value="">Select contact</option>
-              {contacts?.map((c) => (
+              {contacts.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.full_name} ({c.status})
                 </option>
@@ -83,11 +85,11 @@ export default function MessagingPage() {
           <h2 className="font-semibold text-slate-900">Recent outbound</h2>
         </div>
         <div className="divide-y text-sm">
-          {outbound.data?.map((msg) => (
+          {outboundRows.map((msg) => (
             <div key={msg.id} className="px-4 py-3 flex items-start gap-3">
               <div className="flex-1">
                 <div className="font-medium text-slate-900">
-                  {msg.contact.full_name} — {msg.channel}
+                  {msg.contact?.full_name || "Unknown contact"} — {msg.channel}
                 </div>
                 <div className="text-slate-700 whitespace-pre-wrap">{msg.body}</div>
                 <div className="text-xs text-slate-500">
@@ -96,7 +98,7 @@ export default function MessagingPage() {
               </div>
             </div>
           ))}
-          {outbound.data?.length === 0 && <p className="px-4 py-3 text-slate-600">No outbound messages yet.</p>}
+          {outboundRows.length === 0 && <p className="px-4 py-3 text-slate-600">No outbound messages yet.</p>}
         </div>
       </div>
     </section>

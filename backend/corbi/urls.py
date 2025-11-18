@@ -3,6 +3,7 @@ from __future__ import annotations
 from django.contrib import admin
 from django.urls import include, path
 from rest_framework import routers
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from assistant.views import AssistantView
 from bookings.views import BookingViewSet
@@ -23,4 +24,6 @@ urlpatterns = [
     path("api/", include(router.urls)),
     path("api/assistant/", AssistantView.as_view(), name="assistant"),
     path("health/", HealthcheckView.as_view(), name="healthcheck"),
+    path("api/auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
 ]

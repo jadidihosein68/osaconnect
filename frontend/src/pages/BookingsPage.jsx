@@ -4,7 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { getBookings } from "../api/client";
 
 export default function BookingsPage() {
-  const { data, isLoading } = useQuery({ queryKey: ["bookings"], queryFn: getBookings });
+  const { data, isLoading, error } = useQuery({ queryKey: ["bookings"], queryFn: getBookings });
+  const rows = Array.isArray(data) ? data : [];
 
   return (
     <section className="space-y-4">
@@ -12,6 +13,7 @@ export default function BookingsPage() {
         <h1 className="text-xl font-semibold text-slate-900">Bookings</h1>
         <p className="text-sm text-slate-600">Calendar automation and status tracking.</p>
       </div>
+      {error && <p className="text-sm text-red-600">Failed to load bookings.</p>}
       {isLoading ? (
         <p>Loading bookings…</p>
       ) : (
@@ -27,7 +29,7 @@ export default function BookingsPage() {
               </tr>
             </thead>
             <tbody>
-              {data?.map((b) => (
+              {rows.map((b) => (
                 <tr key={b.id} className="border-t">
                   <td className="px-3 py-2">{b.title}</td>
                   <td className="px-3 py-2">{b.contact?.full_name || "—"}</td>

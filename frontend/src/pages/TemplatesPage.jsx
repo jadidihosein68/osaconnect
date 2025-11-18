@@ -4,7 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { getTemplates } from "../api/client";
 
 export default function TemplatesPage() {
-  const { data, isLoading } = useQuery({ queryKey: ["templates"], queryFn: getTemplates });
+  const { data, isLoading, error } = useQuery({ queryKey: ["templates"], queryFn: getTemplates });
+  const templates = Array.isArray(data) ? data : [];
 
   return (
     <section className="space-y-4">
@@ -12,11 +13,12 @@ export default function TemplatesPage() {
         <h1 className="text-xl font-semibold text-slate-900">Templates</h1>
         <p className="text-sm text-slate-600">Review omni-channel templates and personalization slots.</p>
       </div>
+      {error && <p className="text-sm text-red-600">Failed to load templates.</p>}
       {isLoading ? (
         <p>Loading templates…</p>
       ) : (
         <div className="grid md:grid-cols-2 gap-3">
-          {data?.map((tpl) => (
+          {templates.map((tpl) => (
             <article key={tpl.id} className="bg-white border rounded-lg p-4 shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <div>
