@@ -6,7 +6,7 @@ import { Label } from '../ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Upload, CheckCircle, XCircle } from 'lucide-react';
 import { Badge } from '../ui/badge';
-import { connectIntegration, disconnectIntegration, fetchIntegrations, Integration } from '../../lib/api';
+import { connectIntegration, disconnectIntegration, fetchIntegrations, Integration, testIntegration } from '../../lib/api';
 
 export function Settings() {
   const [activeTab, setActiveTab] = useState('branding');
@@ -119,6 +119,29 @@ export function Settings() {
     }
   };
 
+  const handleTest = async (provider: string) => {
+    setLoading(true);
+    setMessage(null);
+    setErrors(null);
+    const entries = formState[provider] || {};
+    const token = entries.token || '';
+    const extra = { ...entries };
+    delete extra.token;
+    if (!token) {
+      setErrors('Token is required to test connection.');
+      setLoading(false);
+      return;
+    }
+    try {
+      const res = await testIntegration(provider, { token, extra });
+      setMessage(res.message || 'Test succeeded.');
+    } catch {
+      setErrors('Test failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const renderIntegrationCard = (provider: string) => {
     const integration = integrations.find((i) => i.provider === provider);
     const cfg = providerConfig[provider];
@@ -158,6 +181,9 @@ export function Settings() {
           ))}
 
           <div className="flex gap-2 pt-4">
+            <Button variant="outline" onClick={() => handleTest(provider)} disabled={loading}>
+              Test Connection
+            </Button>
             {status === 'connected' ? (
               <>
                 <Button onClick={() => handleConnect(provider)} disabled={loading}>

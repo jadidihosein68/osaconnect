@@ -216,3 +216,8 @@ export async function disconnectIntegration(provider: string) {
   const { data } = await api.delete(`/integrations/${provider}/`);
   return data;
 }
+
+export async function testIntegration(provider: string, payload: { token: string; extra?: Record<string, any> }) {
+  const { data } = await api.post(`/integrations/${provider}/test/`, payload);
+  return data;
+}

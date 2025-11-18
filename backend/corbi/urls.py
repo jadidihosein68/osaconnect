@@ -15,6 +15,7 @@ from templates_app.views import MessageTemplateViewSet
 from messaging.webhooks import InboundWebhookView
 from messaging.callbacks import ProviderCallbackView
 from integrations.views import IntegrationListView, IntegrationConnectView, IntegrationDisconnectView
+from integrations.test import IntegrationTestView
 
 router = routers.DefaultRouter()
 router.register(r"contacts", ContactViewSet, basename="contact")
@@ -39,4 +40,5 @@ urlpatterns = [
     path("api/integrations/", IntegrationListView.as_view(), name="integrations"),
     path("api/integrations/<str:provider>/connect/", IntegrationConnectView.as_view(), name="integration-connect"),
     path("api/integrations/<str:provider>/", IntegrationDisconnectView.as_view(), name="integration-disconnect"),
+    path("api/integrations/<str:provider>/test/", IntegrationTestView.as_view(), name="integration-test"),
 ]
