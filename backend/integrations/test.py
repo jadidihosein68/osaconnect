@@ -9,6 +9,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 import requests
 from twilio.rest import Client as TwilioClient
+from telegram import Bot
+import asyncio
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail, Email, To, Content
 
 from organizations.utils import get_current_org
 from organizations.permissions import IsOrgAdmin
@@ -26,13 +30,34 @@ def _validate_with_provider(provider: str, token: str, extra: dict) -> tuple[boo
     headers = {}
     try:
         if provider == "sendgrid":
-            headers["Authorization"] = f"Bearer {token}"
-            resp = requests.get("https://api.sendgrid.com/v3/user/profile", headers=headers, timeout=timeout)
-            return (resp.status_code == 200, f"SendGrid status {resp.status_code}")
+            from_email = extra.get("from_email")
+            to_email = extra.get("to_email")
+            if not (from_email and to_email):
+                return (False, "from_email and to_email are required for SendGrid test")
+            try:
+                sg = SendGridAPIClient(api_key=token)
+                mail = Mail(
+                    from_email=Email(from_email),
+                    to_emails=To(to_email),
+                    subject="Test email",
+                    plain_text_content=Content("text/plain", "Hi from the email"),
+                ).get()
+                resp = sg.client.mail.send.post(request_body=mail)
+                return (resp.status_code in (200, 202), f"SendGrid status {resp.status_code}")
+            except Exception as exc:
+                return (False, f"SendGrid test failed: {exc}")
         if provider == "telegram":
-            resp = requests.get(f"https://api.telegram.org/bot{token}/getMe", timeout=timeout)
-            data = resp.json() if resp.ok else {}
-            return (bool(data.get("ok")), f"Telegram status {resp.status_code}")
+            chat_id = extra.get("chat_id")
+            if not chat_id:
+                return (False, "chat_id is required for Telegram test")
+            try:
+                async def _send():
+                    bot = Bot(token=token)
+                    await bot.send_message(chat_id=chat_id, text="Hello from Telegram-bot!")
+                asyncio.run(_send())
+                return (True, "Telegram message sent")
+            except Exception as exc:
+                return (False, f"Telegram test failed: {exc}")
         if provider == "whatsapp":
             account_sid = extra.get("account_sid")
             from_whatsapp = extra.get("from_whatsapp")

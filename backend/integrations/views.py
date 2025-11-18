@@ -82,8 +82,12 @@ class IntegrationConnectView(APIView):
         # Avoid external calls; perform minimal structural checks
         if provider == "sendgrid" and not token.startswith("SG."):
             return "Warning: SendGrid tokens typically start with 'SG.'"
+        if provider == "sendgrid" and not (extra.get("from_email") and extra.get("to_email")):
+            return "Note: from_email and to_email recommended for SendGrid."
         if provider == "whatsapp" and not (extra.get("account_sid") and extra.get("from_whatsapp")):
             return "Note: account_sid and from_whatsapp are recommended for WhatsApp."
+        if provider == "telegram" and not extra.get("chat_id"):
+            return "Note: chat_id is recommended for Telegram."
         if provider == "google_calendar" and not extra:
             return "Note: calendar metadata not provided."
         return None

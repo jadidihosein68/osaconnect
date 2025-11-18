@@ -32,15 +32,15 @@ export function Settings() {
       name: 'Email Provider (SendGrid)',
       fields: [
         { key: 'token', label: 'API Key', type: 'password' },
-        { key: 'sender_email', label: 'Sender Email' },
-        { key: 'sender_name', label: 'Sender Name' },
+        { key: 'from_email', label: 'From Email' },
+        { key: 'to_email', label: 'To Email' },
       ],
     },
     telegram: {
       name: 'Telegram Bot',
       fields: [
         { key: 'token', label: 'Bot Token', type: 'password' },
-        { key: 'bot_username', label: 'Bot Username' },
+        { key: 'chat_id', label: 'Chat ID' },
       ],
     },
     instagram: {
