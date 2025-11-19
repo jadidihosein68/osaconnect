@@ -26,13 +26,26 @@ class MessageTemplateSerializer(serializers.ModelSerializer):
 
     def validate_variables(self, variables):
         if not isinstance(variables, list):
-            raise serializers.ValidationError("Variables must be a list of placeholder names.")
-        return variables
+            raise serializers.ValidationError("Variables must be a list.")
+        normalized = []
+        for item in variables:
+            if isinstance(item, str):
+                name = item.strip()
+                fallback = ""
+            elif isinstance(item, dict):
+                name = (item.get("name") or "").strip()
+                fallback = item.get("fallback", "")
+            else:
+                raise serializers.ValidationError("Each variable must be an object with 'name' and optional 'fallback'.")
+            if not name:
+                raise serializers.ValidationError("Variable name cannot be empty.")
+            normalized.append({"name": name, "fallback": fallback})
+        return normalized
 
     def validate(self, attrs):
         body = attrs.get("body", "")
         variables = attrs.get("variables", [])
-        missing_in_body = [var for var in variables if f"{{{{{var}}}}}" not in body]
-        if missing_in_body:
-            raise serializers.ValidationError(f"Body is missing placeholders for: {', '.join(missing_in_body)}")
+        names_missing = [var["name"] for var in variables if f"{{{var['name']}}}" not in body]
+        if names_missing:
+            raise serializers.ValidationError(f"Body is missing placeholders for: {', '.join(names_missing)}")
         return attrs

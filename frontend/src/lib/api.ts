@@ -160,6 +160,40 @@ export async function fetchTemplates(): Promise<Template[]> {
   return data;
 }
 
+export async function fetchTemplate(id: number | string): Promise<Template> {
+  const { data } = await api.get(`/templates/${id}/`);
+  return data;
+}
+
+export interface TemplateVariable {
+  name: string;
+  fallback?: string;
+}
+
+export type TemplatePayload = {
+  name: string;
+  channel: string;
+  language?: string;
+  subject?: string;
+  body: string;
+  variables: TemplateVariable[];
+  category?: string;
+};
+
+export async function createTemplate(payload: TemplatePayload): Promise<Template> {
+  const { data } = await api.post("/templates/", payload);
+  return data;
+}
+
+export async function updateTemplate(id: number | string, payload: Partial<TemplatePayload>): Promise<Template> {
+  const { data } = await api.patch(`/templates/${id}/`, payload);
+  return data;
+}
+
+export async function deleteTemplate(id: number | string) {
+  await api.delete(`/templates/${id}/`);
+}
+
 export async function fetchOutbound(): Promise<OutboundMessage[]> {
   const { data } = await api.get("/outbound/");
   return data;

@@ -32,14 +32,14 @@ export function TemplateList({ onCreateTemplate, onEditTemplate }: TemplateListP
   }, []);
 
   const getChannelColor = (channel: string) => {
-    switch (channel) {
-      case 'WhatsApp':
+    switch (channel.toLowerCase()) {
+      case 'whatsapp':
         return 'bg-green-100 text-green-700';
-      case 'Email':
+      case 'email':
         return 'bg-blue-100 text-blue-700';
-      case 'Telegram':
+      case 'telegram':
         return 'bg-cyan-100 text-cyan-700';
-      case 'Instagram':
+      case 'instagram':
         return 'bg-pink-100 text-pink-700';
       default:
         return 'bg-gray-100 text-gray-700';
@@ -65,44 +65,50 @@ export function TemplateList({ onCreateTemplate, onEditTemplate }: TemplateListP
         <p>Loading templates...</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {templates.map((template) => (
-            <Card key={template.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="mb-2">{template.name}</CardTitle>
-                    <Badge className={getChannelColor(template.channel)}>
-                      {template.channel}
-                    </Badge>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onEditTemplate(String(template.id))}
-                  >
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <div className="text-gray-600 mb-1">Variables</div>
-                  <div className="flex flex-wrap gap-1">
-                    {(template.variables || []).map((variable) => (
-                      <Badge key={variable} variant="outline">
-                        {`{${variable}}`}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-                <div className="pt-3 border-t">
-                  <div className="text-gray-500">
-                    {template.approved ? 'Approved' : 'Draft'}
-                  </div>
-                </div>
-              </CardContent>
+          {templates.length === 0 ? (
+            <Card>
+              <CardContent className="py-10 text-center text-gray-500">No templates yet.</CardContent>
             </Card>
-          ))}
+          ) : (
+            templates.map((template) => (
+              <Card key={template.id} className="hover:shadow-lg transition-shadow">
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <CardTitle className="mb-2">{template.name}</CardTitle>
+                      <Badge className={getChannelColor(template.channel)}>
+                        {template.channel.toUpperCase()}
+                      </Badge>
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => onEditTemplate(String(template.id))}>
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <div className="text-gray-600 mb-1">Variables</div>
+                    <div className="flex flex-wrap gap-1">
+                      {(template.variables || []).length === 0 && (
+                        <span className="text-gray-400 text-sm">No variables</span>
+                      )}
+                      {(template.variables || []).map((variable, idx) => {
+                        const name = typeof variable === 'string' ? variable : variable.name;
+                        return (
+                          <Badge key={`${name}-${idx}`} variant="outline">
+                            {`{${name}}`}
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="pt-3 border-t">
+                    <div className="text-gray-500">{template.approved ? 'Approved' : 'Draft'}</div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
         </div>
       )}
     </div>

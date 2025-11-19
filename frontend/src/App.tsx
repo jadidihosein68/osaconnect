@@ -121,6 +121,11 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
     return <BookingDetail bookingId={params.id || null} onBack={() => navigate('/bookings')} />;
   };
 
+  const TemplateEditorWrapper = ({ onBack }: { onBack: () => void }) => {
+    const params = useParams();
+    return <TemplateEditor templateId={params.id || null} onBack={onBack} onSaved={() => navigate('/templates')} />;
+  };
+
   return (
     <Layout 
       currentScreen={location.pathname}
@@ -150,7 +155,23 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
           element={<ContactDetail contactId="new" onBack={() => navigate('/contacts')} onSaved={handleContactSaved} />}
         />
         <Route path="/contacts/:id" element={<ContactDetailPage />} />
-        <Route path="/templates" element={<TemplateList onCreateTemplate={() => navigate('/templates')} onEditTemplate={(id) => navigate(`/templates`)} />} />
+        <Route
+          path="/templates"
+          element={
+            <TemplateList
+              onCreateTemplate={() => navigate('/templates/new')}
+              onEditTemplate={(id) => navigate(`/templates/${id}`)}
+            />
+          }
+        />
+        <Route
+          path="/templates/new"
+          element={<TemplateEditor templateId={null} onBack={() => navigate('/templates')} onSaved={() => navigate('/templates')} />}
+        />
+        <Route
+          path="/templates/:id"
+          element={<TemplateEditorWrapper onBack={() => navigate('/templates')} />}
+        />
         <Route path="/messaging/send" element={<SendMessage />} />
         <Route path="/messaging/campaign" element={<Campaign />} />
         <Route path="/inbound" element={<InboundLogs onViewDetail={(id) => navigate(`/inbound/${id}`)} />} />

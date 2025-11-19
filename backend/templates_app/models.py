@@ -16,7 +16,7 @@ class MessageTemplate(models.Model):
         (CHANNEL_INSTAGRAM, "Instagram"),
     ]
 
-    name = models.CharField(max_length=120, unique=True)
+    name = models.CharField(max_length=120)
     channel = models.CharField(max_length=32, choices=CHANNEL_CHOICES)
     language = models.CharField(max_length=10, default="en")
     subject = models.CharField(max_length=180, blank=True, default="")
@@ -31,13 +31,22 @@ class MessageTemplate(models.Model):
 
     class Meta:
         ordering = ["name"]
+        unique_together = ("organization", "name")
 
     def __str__(self) -> str:
         return f"{self.name} ({self.channel})"
 
     def render(self, data: dict[str, str]) -> str:
         rendered = self.body
-        for var in self.variables:
-            placeholder = f"{{{{{var}}}}}"
-            rendered = rendered.replace(placeholder, data.get(var, f"<missing:{var}>"))
+        for entry in self.variables:
+            if isinstance(entry, str):
+                name = entry
+                fallback = ""
+            else:
+                name = entry.get("name", "")
+                fallback = entry.get("fallback", "")
+            if not name:
+                continue
+            placeholder = f"{{{name}}}"
+            rendered = rendered.replace(placeholder, data.get(name, fallback or f"<missing:{name}>"))
         return rendered
