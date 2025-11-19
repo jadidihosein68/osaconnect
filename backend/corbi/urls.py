@@ -9,7 +9,7 @@ from assistant.views import AssistantView
 from bookings.views import BookingViewSet
 from contacts.views import ContactViewSet
 from messaging.views import InboundMessageViewSet, OutboundMessageViewSet
-from monitoring.views import HealthcheckView, MetricsView, MonitoringSummaryView, SettingsView
+from monitoring.views import HealthcheckView, MetricsView, MonitoringSummaryView, SettingsView, MonitoringDetailView, MonitoringEventsView, MonitoringAlertsView
 from organizations.views import MembershipViewSet
 from templates_app.views import MessageTemplateViewSet
 from messaging.webhooks import InboundWebhookView
@@ -34,6 +34,9 @@ urlpatterns = [
     path("health/", HealthcheckView.as_view(), name="healthcheck"),
     path("api/metrics/", MetricsView.as_view(), name="metrics"),
     path("api/monitoring/summary/", MonitoringSummaryView.as_view(), name="monitoring-summary"),
+    path("api/monitoring/details/", MonitoringDetailView.as_view(), name="monitoring-details"),
+    path("api/monitoring/events/", MonitoringEventsView.as_view(), name="monitoring-events"),
+    path("api/monitoring/alerts/", MonitoringAlertsView.as_view(), name="monitoring-alerts"),
     path("api/settings/", SettingsView.as_view(), name="settings"),
     path("api/auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),

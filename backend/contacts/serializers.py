@@ -33,6 +33,11 @@ class ContactSerializer(serializers.ModelSerializer):
         status = attrs.get("status", getattr(self.instance, "status", Contact.STATUS_ACTIVE))
         if status != Contact.STATUS_ACTIVE and self.context.get("action") == "send_outbound":
             raise serializers.ValidationError("Outbound messaging is only allowed for active contacts.")
+
+        for field in ["phone_whatsapp", "telegram_chat_id", "instagram_scoped_id", "email"]:
+            if field in attrs and not attrs.get(field):
+                attrs[field] = None
+
         return attrs
 
     def create(self, validated_data):

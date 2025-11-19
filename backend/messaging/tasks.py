@@ -11,6 +11,10 @@ from contacts.models import Contact
 from .channels import get_sender
 from .models import OutboundMessage, Suppression
 from django.conf import settings
+from integrations.models import Integration
+from integrations.utils import decrypt_token
+from monitoring.utils import record_alert
+from monitoring.models import MonitoringAlert
 
 
 def _generate_trace_id() -> str:
@@ -65,24 +69,67 @@ def send_outbound_message(self, outbound_id: int):
         return
 
     try:
-        sender = get_sender(message.channel, organization=message.organization)
-        result = sender.send(to=destination, body=message.body, media_url=message.media_url)
+        credentials = _get_integration_credentials(message.organization.id, message.channel)
+    except ValueError as exc:
+        message.status = OutboundMessage.STATUS_FAILED
+        message.error = str(exc)
+        message.save(update_fields=["status", "error", "updated_at"])
+        record_alert(
+            organization=message.organization,
+            category="integration_missing",
+            message=str(exc),
+            severity=MonitoringAlert.SEVERITY_WARNING,
+            metadata={"outbound_id": message.id, "channel": message.channel},
+        )
+        return
+
+    try:
+        sender = get_sender(message.channel)
+        result = sender.send(to=destination, body=message.body, media_url=message.media_url, credentials=credentials)
         if not result.success:
             message.status = OutboundMessage.STATUS_FAILED
             message.error = result.error or "Unknown send failure"
             message.retry_count += 1
+            message.failed_at = timezone.now()
+            record_alert(
+                organization=message.organization,
+                category="send_failure",
+                message=f"{message.channel} send failed: {message.error}",
+                severity=MonitoringAlert.SEVERITY_ERROR,
+                metadata={"outbound_id": message.id, "channel": message.channel},
+            )
         else:
             message.status = OutboundMessage.STATUS_SENT
             message.error = ""
             message.trace_id = result.provider_message_id or _generate_trace_id()
             message.provider_message_id = result.provider_message_id or ""
             message.provider_status = "sent"
+            now = timezone.now()
+            message.sent_at = now
             message.contact.last_outbound_at = timezone.now()
             message.contact.save(update_fields=["last_outbound_at", "updated_at"])
-        message.save(update_fields=["status", "error", "trace_id", "provider_message_id", "provider_status", "retry_count", "updated_at"])
+        message.save(update_fields=["status", "error", "trace_id", "provider_message_id", "provider_status", "retry_count", "sent_at", "failed_at", "updated_at"])
     except Exception as exc:  # pragma: no cover - stub retry path
         message.status = OutboundMessage.STATUS_RETRYING
         message.error = str(exc)
         message.retry_count += 1
         message.save(update_fields=["status", "error", "retry_count", "updated_at"])
+        record_alert(
+            organization=message.organization,
+            category="send_exception",
+            message=f"{message.channel} send raised exception: {exc}",
+            severity=MonitoringAlert.SEVERITY_ERROR,
+            metadata={"outbound_id": message.id, "channel": message.channel},
+        )
         raise self.retry(exc=exc)
+
+
+def _get_integration_credentials(org_id: int, provider: str) -> dict:
+    try:
+        integration = Integration.objects.get(organization_id=org_id, provider=provider, is_active=True)
+    except Integration.DoesNotExist:
+        raise ValueError(f"Integration not configured for {provider}")
+    token = decrypt_token(integration.token_encrypted or "")
+    if not token:
+        raise ValueError(f"Token missing for {provider} integration")
+    return {"token": token, "extra": integration.extra or {}}

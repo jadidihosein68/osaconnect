@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.utils import timezone
 
-from .models import OutboundMessage, Suppression
+from .models import OutboundMessage, Suppression, ProviderEvent
+from monitoring.utils import record_alert
+from monitoring.models import MonitoringAlert
 
 
 class ProviderCallbackView(APIView):
@@ -22,17 +25,40 @@ class ProviderCallbackView(APIView):
         if not msg:
             return Response({"status": "ignored", "reason": "message not found"}, status=202)
 
+        latency = None
+        if msg.sent_at:
+            latency = int((timezone.now() - msg.sent_at).total_seconds() * 1000)
+
+        ProviderEvent.objects.create(
+            organization=msg.organization,
+            outbound=msg,
+            provider_message_id=provider_message_id,
+            channel=msg.channel,
+            status=status,
+            payload=payload,
+            latency_ms=latency or 0,
+        )
+
         if status in ("delivered", "read"):
             msg.status = OutboundMessage.STATUS_DELIVERED if status == "delivered" else OutboundMessage.STATUS_READ
             msg.provider_status = status
-            msg.save(update_fields=["status", "provider_status", "updated_at"])
+            msg.delivered_at = timezone.now()
+            msg.save(update_fields=["status", "provider_status", "delivered_at", "updated_at"])
             return Response({"status": "updated"})
 
         if status in ("failed", "bounced"):
             msg.status = OutboundMessage.STATUS_FAILED
             msg.provider_status = status
             msg.error = payload.get("error") or msg.error
-            msg.save(update_fields=["status", "provider_status", "error", "updated_at"])
+            msg.failed_at = timezone.now()
+            msg.save(update_fields=["status", "provider_status", "error", "failed_at", "updated_at"])
+            record_alert(
+                organization=msg.organization,
+                category="callback_failure",
+                message=f"{msg.channel} reported {status} for message {msg.id}",
+                severity=MonitoringAlert.SEVERITY_ERROR,
+                metadata={"outbound_id": msg.id, "status": status},
+            )
             # record suppression on hard failure/bounce
             identifier = (
                 msg.contact.phone_whatsapp

@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
+LOG_DIR = BASE_DIR / "logs"
+LOG_DIR.mkdir(exist_ok=True)
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-secret-key-change-me")
 DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
@@ -134,12 +136,34 @@ ASSISTANT_KB_PATH = os.getenv("ASSISTANT_KB_PATH", BASE_DIR / "knowledge_base.md
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {"format": "[{asctime}] {levelname} {name}: {message}", "style": "{"},
+    },
     "handlers": {
-        "console": {"class": "logging.StreamHandler"},
+        "console": {"class": "logging.StreamHandler", "formatter": "verbose"},
+        "file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "formatter": "verbose",
+            "filename": LOG_DIR / "corbi.log",
+            "maxBytes": 5 * 1024 * 1024,
+            "backupCount": 5,
+        },
+        "error_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "formatter": "verbose",
+            "filename": LOG_DIR / "corbi-errors.log",
+            "maxBytes": 5 * 1024 * 1024,
+            "backupCount": 5,
+            "level": "WARNING",
+        },
     },
     "loggers": {
+        "django": {
+            "handlers": ["console", "file"],
+            "level": os.getenv("DJANGO_LOG_LEVEL", "INFO"),
+        },
         "corbi.audit": {
-            "handlers": ["console"],
+            "handlers": ["console", "file", "error_file"],
             "level": "INFO",
         },
     },

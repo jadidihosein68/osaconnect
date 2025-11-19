@@ -15,7 +15,7 @@ Providers: `whatsapp`, `sendgrid`, `telegram`, `instagram`, `google_calendar`
 Notes:
 - Tokens are encrypted at rest and never returned. Logs redact tokens.
 - Unique per org+provider; connect overwrites existing token/extra and activates.
-- Minimal validation only; no external calls by default.
+- Backend now uses these credentials for outbound messaging (Twilio WhatsApp, SendGrid email, Telegram bot, Instagram Graph) and Google Calendar sync. The Settings “Test Connection” button hits the same provider APIs used in production sends.
 
 ## Model
 - `Integration`: organization FK, provider (choices), `token_encrypted`, `extra` (JSON), `is_active`, timestamps. Unique (organization, provider).
@@ -27,3 +27,15 @@ PY`
 
 ## Logging
 - Audit logger `corbi.audit` records connect/disconnect events with org, user, provider, redacted tokens.
+
+## Provider Field Guide
+
+| Provider | Required token | Required `extra` fields | Usage |
+| --- | --- | --- | --- |
+| `whatsapp` | Twilio Auth Token | `account_sid`, `from_whatsapp` (Settings test also needs `to_whatsapp`) | Outbound messages sent via Twilio WhatsApp Business |
+| `sendgrid` | SendGrid API key | `from_email` (Settings test also needs `to_email`) | Outbound email notifications via SendGrid |
+| `telegram` | Bot token from BotFather | `chat_id` (Settings test) | Outbound Telegram bot messages |
+| `instagram` | Meta Graph access token | `instagram_scoped_id` (business/thread) | Instagram messaging via Graph API |
+| `google_calendar` | OAuth access token | `calendar_id` (`primary` default) | Booking sync via Google Calendar API |
+
+Settings stores these values via `/api/integrations/...`. Outbound messaging, calendar automation, and monitoring rely on active integrations. Use `/health/` to check pending migrations and `/api/integrations/` to review configured providers.

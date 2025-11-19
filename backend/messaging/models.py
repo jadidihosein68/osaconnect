@@ -39,6 +39,9 @@ class OutboundMessage(models.Model):
     trace_id = models.CharField(max_length=64, blank=True, default="")
     provider_message_id = models.CharField(max_length=128, blank=True, default="")
     provider_status = models.CharField(max_length=64, blank=True, default="")
+    sent_at = models.DateTimeField(null=True, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    failed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -103,3 +106,17 @@ class Suppression(models.Model):
 
     class Meta:
         unique_together = ("organization", "channel", "identifier")
+
+
+class ProviderEvent(models.Model):
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE, related_name="provider_events")
+    outbound = models.ForeignKey(OutboundMessage, null=True, blank=True, on_delete=models.SET_NULL, related_name="provider_events")
+    provider_message_id = models.CharField(max_length=128, blank=True, default="")
+    channel = models.CharField(max_length=32)
+    status = models.CharField(max_length=64)
+    payload = models.JSONField(default=dict, blank=True)
+    latency_ms = models.PositiveIntegerField(default=0)
+    received_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-received_at"]

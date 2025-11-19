@@ -3,7 +3,6 @@
 This file lists what is still open after the latest implementation pass. Use it to plan the next sprint.
 
 ## Channel adapters & callbacks
-- Replace stub senders (WA/Email/Telegram/IG) with real provider clients; surface provider response bodies and timestamps.
 - Harden callback parsing per provider schemas (delivery/read/fail/bounce/opt-out) and persist latency for monitoring.
 - Enforce per-channel compliance (WA template checks, IG transactional, Telegram bot-blocked handling) and richer media validation.
 
@@ -12,11 +11,11 @@ This file lists what is still open after the latest implementation pass. Use it 
 - Expand suppression/opt-out handling (per-channel keywords, global opt-out list, manual review queue).
 
 ## Calendar integration
-- Swap booking calendar stubs for real Google/Microsoft provider calls; handle updates/cancels, attendee responses, and error propagation to UI.
+- Expand beyond Google Calendar basic create/update/delete: add attendee sync, reminders, and support for Microsoft Graph if needed. Surface sync errors in UI.
 
 ## Monitoring & observability
-- Expose dedicated metrics endpoints for dashboard cards by channel and status; add callback latency and error buckets.
-- Add structured logging, tracing IDs end-to-end, and optional alerting hooks (webhook/email).
+- Add tracing IDs end-to-end and log streaming to external sinks (e.g., OpenSearch).
+- Implement alert acknowledgements/escalations and optional webhook delivery (Slack/PagerDuty).
 
 ## Assistant/LLM
 - Replace KB stub with retrieval + LLM provider (`ASSISTANT_PROVIDER`), add safety checks, prompt/response logging, and org-scoped KB CRUD.

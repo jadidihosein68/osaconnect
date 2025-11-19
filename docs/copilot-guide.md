@@ -40,18 +40,19 @@ npm run dev  # http://localhost:5173 proxied to backend
 - Inbound log: `GET /api/inbound/` (read-only)
 - Inbound webhooks: `POST /api/webhooks/{channel}/` (channel=whatsapp|email/telegram/instagram; logs payload, enriches contact if matched)
 - Provider callbacks: `POST /api/callbacks/{channel}/` (provider status updates; marks suppressions on failure/bounce)
-- Bookings: `GET/POST /api/bookings/` (calendar stub writes `external_calendar_id`; updates/cancels sync the stub)
+- Bookings: `GET/POST /api/bookings/` (Google Calendar sync uses integration tokens; updates/cancels patch/delete events)
 - Assistant: `POST /api/assistant/` (KB-backed stub, requires auth/org)
 - Health: `/health/`; Metrics: `/api/metrics/` (counts, failures, retrying) – requires JWT + `X-Org-ID`
 - Monitoring summary KPIs: `/api/monitoring/summary/` (today totals, success rate, inbound today)
+- Monitoring drilldown: `/api/monitoring/details/` (per-channel stats, failure reasons, callback latency, booking/AI failures)
+- Monitoring streams: `/api/monitoring/events/` (provider event log) and `/api/monitoring/alerts/` (alert feed)
 - Settings snapshot: `/api/settings/` (non-secret runtime config like limits/providers)
 - Integrations: `GET /api/integrations/`, `POST /api/integrations/{provider}/connect/`, `DELETE /api/integrations/{provider}/` (org admin only; tokens encrypted, not returned)
 - Admin: `/admin/`
 
 ## Important Config
 - `.env` keys: `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`, `ASSISTANT_KB_PATH`, `OUTBOUND_PER_MINUTE_LIMIT`.
-- Channel keys: `WHATSAPP_API_TOKEN`, `EMAIL_API_KEY`, `TELEGRAM_BOT_TOKEN`, `INSTAGRAM_APP_TOKEN`
-- Calendar and assistant keys: `CALENDAR_PROVIDER`, `CALENDAR_API_KEY`, `ASSISTANT_PROVIDER`, `ASSISTANT_API_KEY`
+- Integrations (WhatsApp, SendGrid, Telegram, Instagram, Google Calendar) are configured per org via `/api/integrations/...`; env vars now only hold Django/Celery defaults. Ensure `FERNET_KEY` is set for encryption. `ALERTS_EMAIL_TO` (optional) enables email notifications for monitoring alerts. Assistant settings still use `ASSISTANT_PROVIDER/API_KEY`.
 - Celery runs eagerly by default (`CELERY_TASK_ALWAYS_EAGER=true`) for local simplicity.
 - Throttling: per-minute send ceiling per channel via `OUTBOUND_PER_MINUTE_LIMIT`.
 
@@ -61,17 +62,17 @@ npm run dev  # http://localhost:5173 proxied to backend
 
 ## Current Behaviors
 - Multi-tenancy: all core models are scoped to `Organization`; access is filtered by `X-Org-ID` header + membership.
-- Outbound send: validates contact active + channel identifier, throttles, dispatches to stub channel senders (`messaging/channels.py`), records status/trace_id, updates last_outbound_at. Provider callbacks mark delivered/read/failed and create suppressions on bounce/fail.
+- Outbound send: validates contact active + channel identifier, throttles, and dispatches to provider adapters powered by integration settings (`messaging/channels.py` uses Twilio, SendGrid, Telegram Bot API, Instagram Graph). Provider callbacks mark delivered/read/failed and create suppressions on bounce/fail.
 - Inbound webhook: logs payload, attempts contact match on identifiers, triggers contact enrichment for the matched org; ignores unmatched orgs.
 - Opt-out: inbound webhook marks contacts unsubscribed if text includes STOP/UNSUBSCRIBE/CANCEL/OPTOUT.
 - Media validation: outbound media URL must be http(s) and one of jpg/png/pdf/mp4/mp3.
 - Templates: variables must have matching `{{var}}` placeholders in body.
 - Metrics: aggregates counts/failures/retrying and today aggregates; monitoring summary provides today totals, success rate, inbound today.
-- Bookings: calendar stub writes `external_calendar_id` when provider keys set.
+- Bookings: Google Calendar integration creates/updates/deletes events using stored OAuth token + calendar_id.
 - Assistant: now requires auth/org and returns KB snippets; replace with real LLM provider when ready.
 
 ## Known Gaps vs PRD (future work)
-- Real channel integrations (WA/Email/Telegram/IG) with callbacks, media validation, opt-out keyword detection.
+- Deeper provider coverage: rich media, per-channel compliance rules, delivery receipts beyond current adapters.
 - Stronger compliance: audit logging, richer role matrix, org-scoped RBAC on every action.
 - Template versioning, promotion, richer approval states.
 - Calendar provider real integration (Google/Microsoft) and user-facing confirmations.

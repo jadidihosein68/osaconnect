@@ -18,6 +18,9 @@ export interface Contact {
   telegram_chat_id?: string;
   instagram_scoped_id?: string;
   status: string;
+  notes?: string;
+  segments?: string[];
+  tags?: string[];
   last_inbound_at?: string;
   last_outbound_at?: string;
 }
@@ -121,6 +124,37 @@ export async function fetchContacts(): Promise<Contact[]> {
   return data;
 }
 
+export async function fetchContact(id: number | string): Promise<Contact> {
+  const { data } = await api.get(`/contacts/${id}/`);
+  return data;
+}
+
+export type ContactPayload = Partial<{
+  full_name: string;
+  email: string;
+  phone_whatsapp: string;
+  telegram_chat_id: string;
+  instagram_scoped_id: string;
+  status: string;
+  notes: string;
+  segments: string[];
+  tags: string[];
+}>;
+
+export async function createContact(payload: ContactPayload): Promise<Contact> {
+  const { data } = await api.post("/contacts/", payload);
+  return data;
+}
+
+export async function updateContact(id: number | string, payload: ContactPayload): Promise<Contact> {
+  const { data } = await api.patch(`/contacts/${id}/`, payload);
+  return data;
+}
+
+export async function deleteContact(id: number | string) {
+  await api.delete(`/contacts/${id}/`);
+}
+
 export async function fetchTemplates(): Promise<Template[]> {
   const { data } = await api.get("/templates/");
   return data;
@@ -153,6 +187,25 @@ export async function fetchBookings(): Promise<Booking[]> {
 
 export async function fetchMonitoringSummary(): Promise<{ totals: Record<string, number>; success_rate: number; average_response_ms: number | null }> {
   const { data } = await api.get("/monitoring/summary/");
+  return data;
+}
+
+export async function fetchMonitoringDetails(): Promise<{
+  per_channel: Record<string, { total: number; delivered: number; failed: number; success_rate: number }>;
+  summary: { outbound: number; inbound: number; callback_errors: number; booking_failures: number; ai_failures: number; avg_callback_latency_ms: number };
+  failure_reasons: Record<string, number>;
+}> {
+  const { data } = await api.get("/monitoring/details/");
+  return data;
+}
+
+export async function fetchMonitoringEvents(limit = 50) {
+  const { data } = await api.get(`/monitoring/events/?limit=${limit}`);
+  return data;
+}
+
+export async function fetchMonitoringAlerts(limit = 20) {
+  const { data } = await api.get(`/monitoring/alerts/?limit=${limit}`);
   return data;
 }
 

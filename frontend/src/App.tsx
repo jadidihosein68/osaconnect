@@ -96,9 +96,19 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
     return <Navigate to="/login" replace />;
   }
 
+  const handleContactSaved = (id: string) => {
+    navigate(`/contacts/${id}`, { replace: true });
+  };
+
   const ContactDetailPage = () => {
     const params = useParams();
-    return <ContactDetail contactId={params.id || null} onBack={() => navigate('/contacts')} />;
+    return (
+      <ContactDetail
+        contactId={params.id || null}
+        onBack={() => navigate('/contacts')}
+        onSaved={handleContactSaved}
+      />
+    );
   };
 
   const InboundDetailPage = () => {
@@ -126,7 +136,19 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
       <Routes>
         <Route path="/login" element={<Login onLogin={handleLogin} loading={loadingMemberships} memberships={memberships} />} />
         <Route path="/" element={<Dashboard onNavigate={(path) => navigate(path)} orgId={orgId} isLoggedIn={isLoggedIn} />} />
-        <Route path="/contacts" element={<ContactsList onViewContact={(id) => navigate(`/contacts/${id}`)} />} />
+        <Route
+          path="/contacts"
+          element={
+            <ContactsList
+              onViewContact={(id) => navigate(`/contacts/${id}`)}
+              onCreateContact={() => navigate('/contacts/new')}
+            />
+          }
+        />
+        <Route
+          path="/contacts/new"
+          element={<ContactDetail contactId="new" onBack={() => navigate('/contacts')} onSaved={handleContactSaved} />}
+        />
         <Route path="/contacts/:id" element={<ContactDetailPage />} />
         <Route path="/templates" element={<TemplateList onCreateTemplate={() => navigate('/templates')} onEditTemplate={(id) => navigate(`/templates`)} />} />
         <Route path="/messaging/send" element={<SendMessage />} />
