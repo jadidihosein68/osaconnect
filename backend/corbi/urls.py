@@ -8,7 +8,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from assistant.views import AssistantView
 from bookings.views import BookingViewSet
 from contacts.views import ContactViewSet, ContactGroupViewSet
-from messaging.views import InboundMessageViewSet, OutboundMessageViewSet
+from messaging.views import InboundMessageViewSet, OutboundMessageViewSet, EmailJobViewSet
 from monitoring.views import HealthcheckView, MetricsView, MonitoringSummaryView, SettingsView, MonitoringDetailView, MonitoringEventsView, MonitoringAlertsView
 from organizations.views import MembershipViewSet
 from templates_app.views import MessageTemplateViewSet
@@ -24,6 +24,7 @@ router.register(r"contact-groups", ContactGroupViewSet, basename="contact-group"
 router.register(r"templates", MessageTemplateViewSet, basename="template")
 router.register(r"outbound", OutboundMessageViewSet, basename="outbound")
 router.register(r"inbound", InboundMessageViewSet, basename="inbound")
+router.register(r"email-jobs", EmailJobViewSet, basename="email-job")
 router.register(r"bookings", BookingViewSet, basename="booking")
 router.register(r"memberships", MembershipViewSet, basename="membership")
 router.register(r"billing/logs", BillingLogViewSet, basename="billing-log")

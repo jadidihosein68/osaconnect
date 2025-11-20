@@ -95,6 +95,34 @@ export interface BillingLog {
   error?: string;
 }
 
+export interface EmailJob {
+  id: number;
+  subject: string;
+  body_html: string;
+  body_text?: string;
+  status: string;
+  total_recipients: number;
+  sent_count: number;
+  failed_count: number;
+  skipped_count: number;
+  excluded_count: number;
+  attachments: any[];
+  created_at: string;
+  started_at?: string;
+  completed_at?: string;
+  recipients?: EmailRecipient[];
+}
+
+export interface EmailRecipient {
+  id: number;
+  contact?: Contact | null;
+  email: string;
+  full_name?: string;
+  status: string;
+  error?: string;
+  sent_at?: string;
+}
+
 let authToken = localStorage.getItem("corbi_token") || "";
 let refreshToken = localStorage.getItem("corbi_refresh") || "";
 let orgId: number | null = localStorage.getItem("corbi_org") ? Number(localStorage.getItem("corbi_org")) : null;
@@ -284,6 +312,28 @@ export async function updateContactGroup(id: number | string, payload: Partial<C
 
 export async function deleteContactGroup(id: number | string) {
   await api.delete(`/contact-groups/${id}/`);
+}
+
+export async function createEmailJob(payload: {
+  subject: string;
+  body_html: string;
+  body_text?: string;
+  contact_ids?: number[];
+  group_ids?: number[];
+  attachments?: any[];
+}): Promise<EmailJob> {
+  const { data } = await api.post("/email-jobs/", payload);
+  return data;
+}
+
+export async function fetchEmailJobs(): Promise<EmailJob[]> {
+  const { data } = await api.get("/email-jobs/");
+  return data;
+}
+
+export async function fetchEmailJob(id: number): Promise<EmailJob> {
+  const { data } = await api.get(`/email-jobs/${id}/`);
+  return data;
 }
 
 export async function fetchOutbound(): Promise<OutboundMessage[]> {

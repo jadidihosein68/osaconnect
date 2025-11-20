@@ -55,8 +55,9 @@ export function Layout({ children, currentScreen, onNavigate, onLogout, organiza
       label: 'Messaging', 
       icon: MessageSquare,
       submenu: [
-        { id: 'send-message', label: 'Send Message' },
-        { id: 'campaign', label: 'Campaigns' },
+        { id: '/messaging/send', label: 'Send Message' },
+        { id: '/messaging/email-logs', label: 'Email Logs' },
+        { id: '/messaging/campaign', label: 'Campaigns' },
       ]
     },
     { id: 'inbound-logs', label: 'Inbound Logs', icon: Inbox },
@@ -124,7 +125,7 @@ export function Layout({ children, currentScreen, onNavigate, onLogout, organiza
                         <button
                           onClick={() => onNavigate(subitem.id.startsWith('/') ? subitem.id : `/${subitem.id}`)}
                           className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
-                            currentScreen === subitem.id
+                            currentScreen === subitem.id || currentScreen.startsWith(subitem.id)
                               ? 'bg-indigo-50 text-indigo-600'
                               : 'text-gray-600 hover:bg-gray-100'
                           }`}

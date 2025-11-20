@@ -15,6 +15,7 @@ from integrations.models import Integration
 from integrations.utils import decrypt_token
 from monitoring.utils import record_alert
 from monitoring.models import MonitoringAlert
+from .models import EmailJob, EmailRecipient
 
 
 def _generate_trace_id() -> str:
@@ -133,3 +134,60 @@ def _get_integration_credentials(org_id: int, provider: str) -> dict:
     if not token:
         raise ValueError(f"Token missing for {provider} integration")
     return {"token": token, "extra": integration.extra or {}}
+
+
+@shared_task(bind=True, default_retry_delay=10, max_retries=2)
+def process_email_job(self, job_id: int, batch_size: int = 100, delay_seconds: int = 1):
+    try:
+        job = EmailJob.objects.get(pk=job_id)
+    except EmailJob.DoesNotExist:
+        return
+    job.status = EmailJob.STATUS_SENDING
+    job.started_at = timezone.now()
+    job.save(update_fields=["status", "started_at", "updated_at"])
+
+    try:
+        credentials = _get_integration_credentials(job.organization_id, "sendgrid")
+        # ensure the subject for this job is passed to the sender (overrides any default in integration.extra)
+        extra = credentials.get("extra") or {}
+        extra["subject"] = job.subject
+        credentials["extra"] = extra
+    except ValueError as exc:
+        job.status = EmailJob.STATUS_FAILED
+        job.error = str(exc)
+        job.save(update_fields=["status", "error", "updated_at"])
+        return
+
+    sender = get_sender("email")
+    recipients_qs = job.recipients.filter(status=EmailRecipient.STATUS_QUEUED)
+    total = recipients_qs.count()
+    sent = failed = skipped = 0
+
+    offset = 0
+    while offset < total:
+        batch = list(recipients_qs.order_by("id")[offset : offset + batch_size])
+        offset += batch_size
+        for r in batch:
+            result = sender.send(to=r.email, body=job.body_text or job.body_html, credentials=credentials)
+            if result.success:
+                r.status = EmailRecipient.STATUS_SENT
+                r.sent_at = timezone.now()
+                sent += 1
+                if r.contact:
+                    r.contact.last_outbound_at = timezone.now()
+                    r.contact.save(update_fields=["last_outbound_at", "updated_at"])
+            else:
+                r.status = EmailRecipient.STATUS_FAILED
+                r.error = result.error or "Send failed"
+                failed += 1
+            r.save(update_fields=["status", "error", "sent_at", "updated_at"])
+        if delay_seconds:
+            import time
+            time.sleep(delay_seconds)
+
+    job.sent_count += sent
+    job.failed_count += failed
+    job.skipped_count += skipped
+    job.status = EmailJob.STATUS_COMPLETED if failed == 0 else EmailJob.STATUS_FAILED
+    job.completed_at = timezone.now()
+    job.save(update_fields=["sent_count", "failed_count", "skipped_count", "status", "completed_at", "updated_at"])

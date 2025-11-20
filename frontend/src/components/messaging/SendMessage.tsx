@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -6,15 +6,15 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Textarea } from '../ui/textarea';
 import { Upload, Send } from 'lucide-react';
-import { fetchContacts, fetchTemplates, sendOutbound, Contact, Template } from '../../lib/api';
+import { fetchContacts, Contact, fetchContactGroups, ContactGroup, createEmailJob } from '../../lib/api';
 
 export function SendMessage() {
-  const [channel, setChannel] = useState('whatsapp');
-  const [selectedTemplate, setSelectedTemplate] = useState<string>('');
-  const [variables, setVariables] = useState<Record<string, string>>({});
+  const [channel] = useState('email');
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [contactId, setContactId] = useState<number | null>(null);
+  const [groups, setGroups] = useState<ContactGroup[]>([]);
+  const [selectedContactIds, setSelectedContactIds] = useState<number[]>([]);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<number[]>([]);
+  const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,54 +23,43 @@ export function SendMessage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [cData, tData] = await Promise.all([fetchContacts(), fetchTemplates()]);
-        setContacts(cData);
-        setTemplates(tData);
+        const [cData, gData] = await Promise.all([fetchContacts(), fetchContactGroups()]);
+        setContacts(cData.filter((c) => c.email));
+        setGroups(gData);
       } catch {
-        setError('Failed to load contacts/templates');
+        setError('Failed to load contacts/groups');
       }
     };
     load();
   }, []);
 
-  const channelTemplates = useMemo(
-    () => templates.filter((t) => t.channel === channel),
-    [templates, channel],
-  );
-
-  const getTemplatePreview = () => {
-    const tpl = channelTemplates.find((t) => String(t.id) === selectedTemplate);
-    if (!tpl) return body || 'Select a template to see preview';
-    let rendered = tpl.body;
-    (tpl.variables || []).forEach((v) => {
-      const placeholder = `{{${v}}}`;
-      rendered = rendered.replace(placeholder, variables[v] || placeholder);
-    });
-    return rendered;
-  };
-
   const handleSend = async () => {
-    if (!contactId) {
-      setError('Select a contact');
+    if (!subject.trim() || !body.trim()) {
+      setError('Subject and body are required');
+      return;
+    }
+    if (selectedContactIds.length === 0 && selectedGroupIds.length === 0) {
+      setError('Select at least one contact or group');
       return;
     }
     setLoading(true);
     setError(null);
     setSuccess(null);
     try {
-      const tpl = channelTemplates.find((t) => String(t.id) === selectedTemplate);
-      const renderedBody = tpl ? getTemplatePreview() : body;
-      await sendOutbound({
-        contact_id: contactId,
-        channel,
-        body: renderedBody,
+      await createEmailJob({
+        subject,
+        body_html: body,
+        body_text: body,
+        contact_ids: selectedContactIds,
+        group_ids: selectedGroupIds,
       });
-      setSuccess('Message sent');
+      setSuccess('Email queued successfully');
       setBody('');
-      setSelectedTemplate('');
-      setVariables({});
+      setSubject('');
+      setSelectedContactIds([]);
+      setSelectedGroupIds([]);
     } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Failed to send');
+      setError(e?.response?.data || e?.response?.data?.detail || 'Failed to send');
     } finally {
       setLoading(false);
     }
@@ -94,78 +83,73 @@ export function SendMessage() {
             {success && <p className="text-green-600 text-sm">{success}</p>}
             <div className="space-y-2">
               <Label>Channel</Label>
-              <Select value={channel} onValueChange={setChannel}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                  <SelectItem value="email">Email</SelectItem>
-                  <SelectItem value="telegram">Telegram</SelectItem>
-                  <SelectItem value="instagram">Instagram</SelectItem>
-                </SelectContent>
-              </Select>
+              <Input value="Email (SendGrid)" disabled />
             </div>
 
             <div className="space-y-2">
-              <Label>Contact</Label>
-              <Select value={contactId ? String(contactId) : ''} onValueChange={(v) => setContactId(Number(v))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a contact" />
-                </SelectTrigger>
-                <SelectContent>
-                  {contacts.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>
-                      {c.full_name} ({c.status})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Recipients</Label>
+              <div className="max-h-48 overflow-y-auto border rounded p-2 space-y-2">
+                {contacts.map((c) => {
+                  const checked = selectedContactIds.includes(c.id);
+                  return (
+                    <label key={c.id} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={checked}
+                        onChange={() =>
+                          setSelectedContactIds((prev) =>
+                            checked ? prev.filter((id) => id !== c.id) : [...prev, c.id],
+                          )
+                        }
+                      />
+                      <span>{c.full_name} ({c.email})</span>
+                    </label>
+                  );
+                })}
+                {contacts.length === 0 && <div className="text-gray-500 text-sm">No contacts with email.</div>}
+              </div>
             </div>
 
             <div className="space-y-2">
-              <Label>Template</Label>
-              <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a template" />
-                </SelectTrigger>
-                <SelectContent>
-                  {channelTemplates.map((tpl) => (
-                    <SelectItem key={tpl.id} value={String(tpl.id)}>
-                      {tpl.name}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value="">Custom</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>Groups</Label>
+              <div className="flex flex-wrap gap-2">
+                {groups.map((g) => {
+                  const checked = selectedGroupIds.includes(g.id);
+                  return (
+                    <Button
+                      key={g.id}
+                      type="button"
+                      variant={checked ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() =>
+                        setSelectedGroupIds((prev) =>
+                          checked ? prev.filter((id) => id !== g.id) : [...prev, g.id],
+                        )
+                      }
+                    >
+                      {g.name}
+                    </Button>
+                  );
+                })}
+                {groups.length === 0 && <span className="text-gray-500 text-sm">No groups yet.</span>}
+              </div>
             </div>
 
-            {selectedTemplate && (
-              <div className="space-y-4 pt-4 border-t">
-                <div className="text-gray-900">Template Variables</div>
-                {(channelTemplates.find((t) => String(t.id) === selectedTemplate)?.variables || []).map((v) => (
-                  <div className="space-y-2" key={v}>
-                    <Label>{v}</Label>
-                    <Input
-                      placeholder={v}
-                      value={variables[v] || ''}
-                      onChange={(e) => setVariables({ ...variables, [v]: e.target.value })}
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-            {!selectedTemplate && (
-              <div className="space-y-2">
-                <Label>Custom Message</Label>
-                <Textarea
-                  placeholder="Type your message"
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  rows={6}
-                />
-              </div>
-            )}
+            <div className="space-y-2">
+              <Label>Subject</Label>
+              <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Body (HTML allowed)</Label>
+              <Textarea
+                placeholder="Type your email body. Supported: basic HTML."
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                rows={10}
+              />
+            </div>
 
             <div className="space-y-2">
               <Label>Attachments (Optional)</Label>
@@ -197,7 +181,7 @@ export function SendMessage() {
               </div>
               <div className="bg-white rounded-lg p-4 shadow-sm">
                 <div className="whitespace-pre-wrap text-gray-900">
-                  {getTemplatePreview()}
+                  {body || 'Compose your email to preview it here.'}
                 </div>
               </div>
             </div>

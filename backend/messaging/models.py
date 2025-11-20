@@ -5,6 +5,8 @@ from django.utils import timezone
 
 from contacts.models import Contact
 from templates_app.models import MessageTemplate
+from organizations.models import Organization
+from django.conf import settings
 
 
 class OutboundMessage(models.Model):
@@ -106,6 +108,70 @@ class Suppression(models.Model):
 
     class Meta:
         unique_together = ("organization", "channel", "identifier")
+
+
+class EmailJob(models.Model):
+    STATUS_QUEUED = "queued"
+    STATUS_SENDING = "sending"
+    STATUS_COMPLETED = "completed"
+    STATUS_FAILED = "failed"
+    STATUS_CHOICES = [
+        (STATUS_QUEUED, "Queued"),
+        (STATUS_SENDING, "Sending"),
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_FAILED, "Failed"),
+    ]
+
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="email_jobs")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    subject = models.CharField(max_length=255)
+    body_html = models.TextField()
+    body_text = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_QUEUED)
+    total_recipients = models.PositiveIntegerField(default=0)
+    sent_count = models.PositiveIntegerField(default=0)
+    failed_count = models.PositiveIntegerField(default=0)
+    skipped_count = models.PositiveIntegerField(default=0)
+    excluded_count = models.PositiveIntegerField(default=0)
+    error = models.TextField(blank=True, default="")
+    attachments = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"EmailJob {self.id} {self.subject}"
+
+
+class EmailRecipient(models.Model):
+    STATUS_QUEUED = "queued"
+    STATUS_SENT = "sent"
+    STATUS_FAILED = "failed"
+    STATUS_SKIPPED = "skipped"
+    STATUS_CHOICES = [
+        (STATUS_QUEUED, "Queued"),
+        (STATUS_SENT, "Sent"),
+        (STATUS_FAILED, "Failed"),
+        (STATUS_SKIPPED, "Skipped"),
+    ]
+
+    job = models.ForeignKey(EmailJob, on_delete=models.CASCADE, related_name="recipients")
+    contact = models.ForeignKey(Contact, null=True, blank=True, on_delete=models.SET_NULL, related_name="email_recipients")
+    email = models.EmailField()
+    full_name = models.CharField(max_length=255, blank=True, default="")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_QUEUED)
+    error = models.TextField(blank=True, default="")
+    sent_at = models.DateTimeField(null=True, blank=True)
+    retry_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["id"]
 
 
 class ProviderEvent(models.Model):

@@ -18,6 +18,7 @@ import { MonitoringDashboard } from './components/monitoring/MonitoringDashboard
 import { Settings } from './components/settings/Settings';
 import { Billing } from './components/billing/Billing';
 import { GroupsPage } from './components/contacts/GroupsPage';
+import { EmailLogs } from './components/messaging/EmailLogs';
 import { Layout } from './components/Layout';
 import { fetchMemberships, setAuth, setOrg, Membership } from './lib/api';
 
@@ -216,6 +217,7 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
           element={<TemplateEditorWrapper onBack={() => navigate('/templates')} />}
         />
         <Route path="/messaging/send" element={<SendMessage />} />
+        <Route path="/messaging/email-logs" element={<EmailLogs />} />
         <Route path="/messaging/campaign" element={<Campaign />} />
         <Route path="/inbound" element={<InboundLogs onViewDetail={(id) => navigate(`/inbound/${id}`)} />} />
         <Route path="/inbound/:id" element={<InboundDetailPage />} />
