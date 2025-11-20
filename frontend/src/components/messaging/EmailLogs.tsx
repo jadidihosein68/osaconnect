@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { fetchEmailJobs, EmailJob } from '../../lib/api';
@@ -7,6 +8,7 @@ export function EmailLogs() {
   const [jobs, setJobs] = useState<EmailJob[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const load = async () => {
@@ -53,7 +55,7 @@ export function EmailLogs() {
               </TableHeader>
               <TableBody>
                 {jobs.map((job) => (
-                  <TableRow key={job.id}>
+                  <TableRow key={job.id} className="cursor-pointer hover:bg-gray-50" onClick={() => navigate(`/messaging/email-logs/${job.id}`)}>
                     <TableCell>{job.subject}</TableCell>
                     <TableCell className="capitalize">{job.status}</TableCell>
                     <TableCell>{job.total_recipients}</TableCell>

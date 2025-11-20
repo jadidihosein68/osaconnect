@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import random
 import string
 from typing import Any
@@ -9,13 +10,22 @@ from django.utils import timezone
 
 from contacts.models import Contact
 from .channels import get_sender
-from .models import OutboundMessage, Suppression
+from .models import OutboundMessage, Suppression, EmailJob, EmailRecipient, EmailAttachment, ContactEngagement
 from django.conf import settings
+from django.core.signing import TimestampSigner
 from integrations.models import Integration
 from integrations.utils import decrypt_token
 from monitoring.utils import record_alert
 from monitoring.models import MonitoringAlert
-from .models import EmailJob, EmailRecipient
+
+DEFAULT_UNSUB_URL = getattr(settings, "UNSUBSCRIBE_URL", "")
+DEFAULT_UNSUB_MAILTO = getattr(settings, "UNSUBSCRIBE_MAILTO", "")
+FOOTER_TEXT = "If you no longer wish to receive these emails, you can unsubscribe below."
+signer = TimestampSigner()
+EMAIL_BATCH_SIZE = int(getattr(settings, "EMAIL_BATCH_SIZE", 100))
+EMAIL_BATCH_DELAY_SECONDS = int(getattr(settings, "EMAIL_BATCH_DELAY_SECONDS", 1))
+EMAIL_RETRY_DELAY_SECONDS = int(getattr(settings, "EMAIL_RETRY_DELAY_SECONDS", 10))
+EMAIL_MAX_RETRIES = int(getattr(settings, "EMAIL_MAX_RETRIES", 2))
 
 
 def _generate_trace_id() -> str:
@@ -136,8 +146,10 @@ def _get_integration_credentials(org_id: int, provider: str) -> dict:
     return {"token": token, "extra": integration.extra or {}}
 
 
-@shared_task(bind=True, default_retry_delay=10, max_retries=2)
-def process_email_job(self, job_id: int, batch_size: int = 100, delay_seconds: int = 1):
+@shared_task(bind=True, default_retry_delay=EMAIL_RETRY_DELAY_SECONDS, max_retries=EMAIL_MAX_RETRIES)
+def process_email_job(self, job_id: int, batch_size: int = EMAIL_BATCH_SIZE, delay_seconds: int = EMAIL_BATCH_DELAY_SECONDS):
+    batch_size = int(getattr(settings, "EMAIL_BATCH_SIZE", batch_size))
+    delay_seconds = int(getattr(settings, "EMAIL_BATCH_DELAY_SECONDS", delay_seconds))
     try:
         job = EmailJob.objects.get(pk=job_id)
     except EmailJob.DoesNotExist:
@@ -168,7 +180,9 @@ def process_email_job(self, job_id: int, batch_size: int = 100, delay_seconds: i
         batch = list(recipients_qs.order_by("id")[offset : offset + batch_size])
         offset += batch_size
         for r in batch:
-            result = sender.send(to=r.email, body=job.body_text or job.body_html, credentials=credentials)
+            rendered_body = _render_body(job, r)
+            attachments = _load_attachments(job.attachments)
+            result = sender.send(to=r.email, body=rendered_body, credentials=credentials, attachments=attachments)
             if result.success:
                 r.status = EmailRecipient.STATUS_SENT
                 r.sent_at = timezone.now()
@@ -176,10 +190,25 @@ def process_email_job(self, job_id: int, batch_size: int = 100, delay_seconds: i
                 if r.contact:
                     r.contact.last_outbound_at = timezone.now()
                     r.contact.save(update_fields=["last_outbound_at", "updated_at"])
+                    ContactEngagement.objects.create(
+                        contact=r.contact,
+                        channel="email",
+                        subject=job.subject,
+                        status="sent",
+                        error="",
+                    )
             else:
                 r.status = EmailRecipient.STATUS_FAILED
                 r.error = result.error or "Send failed"
                 failed += 1
+                if r.contact:
+                    ContactEngagement.objects.create(
+                        contact=r.contact,
+                        channel="email",
+                        subject=job.subject,
+                        status="failed",
+                        error=r.error,
+                    )
             r.save(update_fields=["status", "error", "sent_at", "updated_at"])
         if delay_seconds:
             import time
@@ -191,3 +220,82 @@ def process_email_job(self, job_id: int, batch_size: int = 100, delay_seconds: i
     job.status = EmailJob.STATUS_COMPLETED if failed == 0 else EmailJob.STATUS_FAILED
     job.completed_at = timezone.now()
     job.save(update_fields=["sent_count", "failed_count", "skipped_count", "status", "completed_at", "updated_at"])
+
+
+def _render_body(job: EmailJob, recipient: EmailRecipient) -> str:
+    contact = recipient.contact
+    full_name = (contact.full_name if contact else recipient.full_name) or ""
+    parts = full_name.split()
+    first_name = parts[0] if parts else ""
+    last_name = " ".join(parts[1:]) if len(parts) > 1 else ""
+    company_name = ""
+    if contact and isinstance(contact.metadata, dict):
+        company_name = contact.metadata.get("company_name", "")
+    substitutions = {
+        "{{first_name}}": first_name,
+        "{{last_name}}": last_name,
+        "{{full_name}}": full_name,
+        "{{company_name}}": company_name,
+    }
+    body = job.body_html or job.body_text or ""
+    for placeholder, value in substitutions.items():
+        body = body.replace(placeholder, value)
+
+    unsubscribe_link = _build_unsubscribe_link(job.organization_id, recipient)
+    if unsubscribe_link:
+        footer_html = (
+            f"<div style='margin-top:16px;font-size:12px;color:#6b7280;'>"
+            f"{FOOTER_TEXT}<br />"
+            f"<a href='{unsubscribe_link}' "
+            f"style='display:inline-block;margin-top:8px;padding:8px 12px;background:#e5e7eb;border-radius:6px;color:#111827;text-decoration:none;'>"
+            f"Unsubscribe</a></div>"
+        )
+        if "<html" in body.lower() or "<p" in body.lower() or "<div" in body.lower():
+          # treat as html
+            body = body + footer_html
+        else:
+            body = body + f"\n\n{FOOTER_TEXT}\nUnsubscribe: {unsubscribe_link}"
+    else:
+        body = body + f"\n\n{FOOTER_TEXT}"
+    return body
+
+
+def _build_unsubscribe_link(org_id: int, recipient: EmailRecipient) -> str:
+    """
+    Best practice: hosted unsubscribe URL with a signed token.
+    """
+    base = DEFAULT_UNSUB_URL.rstrip("/") if DEFAULT_UNSUB_URL else ""
+    if base and recipient.email:
+        raw = f"{org_id}|{recipient.email}"
+        token = signer.sign(raw)
+        return f"{base}/unsubscribe/?token={token}"
+    if DEFAULT_UNSUB_MAILTO:
+        return f"mailto:{DEFAULT_UNSUB_MAILTO}?subject=Unsubscribe&body=Please%20unsubscribe%20{recipient.email}"
+    return ""
+
+
+def _load_attachments(attachments_meta: list[dict]) -> list:
+    loaded = []
+    if not attachments_meta:
+        return loaded
+    for meta in attachments_meta:
+        path = meta.get("path")
+        filename = meta.get("filename") or (path.split("/")[-1] if path else "attachment")
+        try:
+            att = EmailAttachment.objects.get(file=path)
+            with att.file.open("rb") as fh:
+                content = fh.read()
+        except EmailAttachment.DoesNotExist:
+            continue
+        except Exception:
+            continue
+        import base64
+
+        loaded.append(
+            {
+                "filename": filename,
+                "type": meta.get("content_type") or "application/octet-stream",
+                "content": base64.b64encode(content).decode(),
+            }
+        )
+    return loaded

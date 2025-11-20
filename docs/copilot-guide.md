@@ -67,6 +67,9 @@ npm run dev  # http://localhost:5173 proxied to backend
 - Opt-out: inbound webhook marks contacts unsubscribed if text includes STOP/UNSUBSCRIBE/CANCEL/OPTOUT.
 - Media validation: outbound media URL must be http(s) and one of jpg/png/pdf/mp4/mp3.
 - Templates: variables must have matching `{{var}}` placeholders in body.
+- Email jobs (SendGrid): `/api/email-jobs/` create/list/detail, `/api/email-jobs/{id}/retry_failed/`. Jobs created from selected contacts/groups (org-scoped), queued via Celery with batching/delay, per-recipient status logged. Subject and per-recipient personalization (`{{first_name}}`, `{{last_name}}`, `{{full_name}}`, `{{company_name}}`). Unsubscribe footer with signed token link: set `UNSUBSCRIBE_URL` (preferred) or `UNSUBSCRIBE_MAILTO`. Endpoint `/unsubscribe/` marks contact unsubscribed and adds email suppression.
+- Email attachments: `POST /api/email-attachments/` (multipart) uploads validated files (pdf/jpg/png/docx/xlsx/zip up to 10MB) and returns ids; include `attachment_ids` when creating email jobs. S3-like storage not configured; uses Django media.
+- Email batching config via env: `EMAIL_BATCH_SIZE`, `EMAIL_BATCH_DELAY_SECONDS`, `EMAIL_MAX_RETRIES`, `EMAIL_RETRY_DELAY_SECONDS`.
 - Metrics: aggregates counts/failures/retrying and today aggregates; monitoring summary provides today totals, success rate, inbound today.
 - Bookings: Google Calendar integration creates/updates/deletes events using stored OAuth token + calendar_id.
 - Assistant: now requires auth/org and returns KB snippets; replace with real LLM provider when ready.

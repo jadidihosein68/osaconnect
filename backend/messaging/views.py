@@ -1,15 +1,21 @@
 from __future__ import annotations
 
-from rest_framework import filters, viewsets, status, mixins
-from rest_framework.decorators import action
+from rest_framework import filters, viewsets, status, mixins, parsers
+from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
+from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
+from django.http import HttpResponse
 import logging
 from organizations.utils import get_current_org
 from organizations.permissions import IsOrgMemberWithRole
 
-from .models import InboundMessage, OutboundMessage, EmailJob
+from .models import InboundMessage, OutboundMessage, EmailJob, EmailAttachment
 from .serializers import InboundMessageSerializer, OutboundMessageSerializer, EmailJobSerializer, EmailJobCreateSerializer
+from .serializers_extra import EmailAttachmentSerializer
 from .tasks import process_email_job
+from .models import Suppression
+from .serializers import EmailRecipientSerializer
+from organizations.utils import get_current_org
 audit_logger = logging.getLogger("corbi.audit")
 
 
@@ -97,6 +103,17 @@ class EmailJobViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
         process_email_job.delay(job.id)
         return Response(EmailJobSerializer(job).data, status=status.HTTP_201_CREATED)
 
+
+class EmailAttachmentViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
+    queryset = EmailAttachment.objects.all()
+    serializer_class = EmailAttachmentSerializer
+    permission_classes = [IsOrgMemberWithRole]
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser]
+
+    def get_queryset(self):
+        org = get_current_org(self.request)
+        return super().get_queryset().filter(organization=org)
+
     @action(detail=True, methods=["post"])
     def retry_failed(self, request, pk=None):
         job = self.get_object()
@@ -106,3 +123,42 @@ class EmailJobViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
         job.save(update_fields=["status", "failed_count", "updated_at"])
         process_email_job.delay(job.id)
         return Response({"status": "requeued"})
+
+
+@api_view(["GET"])
+def unsubscribe(request):
+    token = request.GET.get("token")
+    if not token:
+        return HttpResponse("<h3>Missing token</h3>", status=400)
+    signer = TimestampSigner()
+    try:
+        raw = signer.unsign(token, max_age=60 * 60 * 24 * 7)  # 7 days
+        org_id_str, email = raw.split("|", 1)
+        org_id = int(org_id_str)
+    except (BadSignature, SignatureExpired, ValueError):
+        html = """
+        <html><body style='font-family:Arial;padding:24px;'>
+        <h2 style='color:#b91c1c;'>Invalid or expired link</h2>
+        <p>This unsubscribe link is invalid or has expired. Please request a new unsubscribe link.</p>
+        </body></html>
+        """
+        return HttpResponse(html, status=400)
+
+    from contacts.models import Contact
+
+    try:
+        contact = Contact.objects.get(organization_id=org_id, email=email)
+        contact.status = Contact.STATUS_UNSUBSCRIBED
+        contact.save(update_fields=["status", "updated_at"])
+    except Contact.DoesNotExist:
+        contact = None
+
+    Suppression.objects.get_or_create(organization_id=org_id, channel="email", identifier=email)
+
+    html = f"""
+    <html><body style='font-family:Arial;padding:24px;'>
+    <h2 style='color:#15803d;'>Unsubscribed</h2>
+    <p>{email} has been unsubscribed from future emails.</p>
+    </body></html>
+    """
+    return HttpResponse(html)

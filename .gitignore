@@ -19,3 +19,7 @@ dist/
 backend/logs/corbi-errors.log
 backend/logs/corbi.log
 backend/logs/
+
+# build output
+frontend/build
+frontend/dist

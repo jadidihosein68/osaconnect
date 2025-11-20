@@ -106,11 +106,19 @@ export interface EmailJob {
   failed_count: number;
   skipped_count: number;
   excluded_count: number;
+  exclusions?: { contact_id?: number; email?: string; reason?: string }[];
+  batch_config?: {
+    batch_size: number;
+    batch_delay_seconds: number;
+    max_retries: number;
+    retry_delay_seconds: number;
+  };
   attachments: any[];
   created_at: string;
   started_at?: string;
   completed_at?: string;
   recipients?: EmailRecipient[];
+  error?: string;
 }
 
 export interface EmailRecipient {
@@ -321,6 +329,7 @@ export async function createEmailJob(payload: {
   contact_ids?: number[];
   group_ids?: number[];
   attachments?: any[];
+  attachment_ids?: number[];
 }): Promise<EmailJob> {
   const { data } = await api.post("/email-jobs/", payload);
   return data;
@@ -331,8 +340,22 @@ export async function fetchEmailJobs(): Promise<EmailJob[]> {
   return data;
 }
 
+export async function uploadEmailAttachment(file: File): Promise<{ id: number; filename: string; size: number; content_type: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await api.post("/email-attachments/", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
 export async function fetchEmailJob(id: number): Promise<EmailJob> {
   const { data } = await api.get(`/email-jobs/${id}/`);
+  return data;
+}
+
+export async function retryEmailJob(id: number): Promise<{ status: string }> {
+  const { data } = await api.post(`/email-jobs/${id}/retry_failed/`);
   return data;
 }
 

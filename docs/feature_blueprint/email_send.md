@@ -322,6 +322,11 @@ Emails must include a footer with unsubscribe instructions.
 
 Contacts must remain private per organization.
 
+Unsubscribe
+
+- Footer includes an unsubscribe link. Configure `UNSUBSCRIBE_URL` (preferred) or `UNSUBSCRIBE_MAILTO`.
+- Endpoint `/unsubscribe/?token=<signed>` marks the contact as unsubscribed and adds an email suppression. Token signs `org|email` with a 30-day max age; replace with a stronger signer/tokenization in production.
+
 10. Non-functional Requirements
 
 Sending pipeline must handle:

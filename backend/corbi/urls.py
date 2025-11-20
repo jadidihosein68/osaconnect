@@ -8,7 +8,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from assistant.views import AssistantView
 from bookings.views import BookingViewSet
 from contacts.views import ContactViewSet, ContactGroupViewSet
-from messaging.views import InboundMessageViewSet, OutboundMessageViewSet, EmailJobViewSet
+from messaging.views import InboundMessageViewSet, OutboundMessageViewSet, EmailJobViewSet, EmailAttachmentViewSet, unsubscribe
 from monitoring.views import HealthcheckView, MetricsView, MonitoringSummaryView, SettingsView, MonitoringDetailView, MonitoringEventsView, MonitoringAlertsView
 from organizations.views import MembershipViewSet
 from templates_app.views import MessageTemplateViewSet
@@ -25,6 +25,7 @@ router.register(r"templates", MessageTemplateViewSet, basename="template")
 router.register(r"outbound", OutboundMessageViewSet, basename="outbound")
 router.register(r"inbound", InboundMessageViewSet, basename="inbound")
 router.register(r"email-jobs", EmailJobViewSet, basename="email-job")
+router.register(r"email-attachments", EmailAttachmentViewSet, basename="email-attachment")
 router.register(r"bookings", BookingViewSet, basename="booking")
 router.register(r"memberships", MembershipViewSet, basename="membership")
 router.register(r"billing/logs", BillingLogViewSet, basename="billing-log")
@@ -35,6 +36,7 @@ urlpatterns = [
     path("api/webhooks/<str:channel>/", InboundWebhookView.as_view(), name="inbound_webhook"),
     path("api/callbacks/<str:channel>/", ProviderCallbackView.as_view(), name="provider_callback"),
     path("api/assistant/", AssistantView.as_view(), name="assistant"),
+    path("unsubscribe/", unsubscribe, name="unsubscribe"),
     path("health/", HealthcheckView.as_view(), name="healthcheck"),
     path("api/metrics/", MetricsView.as_view(), name="metrics"),
     path("api/monitoring/summary/", MonitoringSummaryView.as_view(), name="monitoring-summary"),

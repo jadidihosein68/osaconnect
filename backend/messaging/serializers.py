@@ -5,7 +5,7 @@ from rest_framework import serializers
 from contacts.models import Contact
 from contacts.serializers import ContactSerializer
 from templates_app.models import MessageTemplate
-from .models import InboundMessage, OutboundMessage, EmailJob, EmailRecipient
+from .models import InboundMessage, OutboundMessage, EmailJob, EmailRecipient, EmailAttachment
 from urllib.parse import urlparse
 import logging
 from organizations.utils import get_current_org
@@ -111,6 +111,7 @@ class EmailRecipientSerializer(serializers.ModelSerializer):
 
 class EmailJobSerializer(serializers.ModelSerializer):
     recipients = EmailRecipientSerializer(many=True, read_only=True)
+    batch_config = serializers.SerializerMethodField()
 
     class Meta:
         model = EmailJob
@@ -125,11 +126,14 @@ class EmailJobSerializer(serializers.ModelSerializer):
             "failed_count",
             "skipped_count",
             "excluded_count",
+            "exclusions",
+            "error",
             "attachments",
             "created_at",
             "started_at",
             "completed_at",
             "recipients",
+            "batch_config",
         ]
         read_only_fields = [
             "status",
@@ -137,11 +141,24 @@ class EmailJobSerializer(serializers.ModelSerializer):
             "failed_count",
             "skipped_count",
             "excluded_count",
+            "exclusions",
+            "error",
             "created_at",
             "started_at",
             "completed_at",
             "recipients",
+            "batch_config",
         ]
+
+    def get_batch_config(self, obj):
+        from django.conf import settings
+
+        return {
+            "batch_size": getattr(settings, "EMAIL_BATCH_SIZE", 100),
+            "batch_delay_seconds": getattr(settings, "EMAIL_BATCH_DELAY_SECONDS", 1),
+            "max_retries": getattr(settings, "EMAIL_MAX_RETRIES", 2),
+            "retry_delay_seconds": getattr(settings, "EMAIL_RETRY_DELAY_SECONDS", 10),
+        }
 
 
 class EmailJobCreateSerializer(serializers.Serializer):
@@ -149,6 +166,7 @@ class EmailJobCreateSerializer(serializers.Serializer):
     body_html = serializers.CharField()
     body_text = serializers.CharField(required=False, allow_blank=True, default="")
     attachments = serializers.ListField(child=serializers.DictField(), required=False, allow_empty=True)
+    attachment_ids = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=True)
     contact_ids = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=True)
     group_ids = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=True)
 
@@ -164,18 +182,29 @@ class EmailJobCreateSerializer(serializers.Serializer):
         contact_ids = validated_data.get("contact_ids") or []
         group_ids = validated_data.get("group_ids") or []
 
-        contacts = Contact.objects.filter(organization=org, status=Contact.STATUS_ACTIVE)
+        contacts = Contact.objects.none()
         if contact_ids:
-            contacts = contacts.filter(id__in=contact_ids)
+            contacts = contacts | Contact.objects.filter(organization=org, status=Contact.STATUS_ACTIVE, id__in=contact_ids)
         if group_ids:
             contacts = contacts | Contact.objects.filter(groups__id__in=group_ids, organization=org, status=Contact.STATUS_ACTIVE)
         contacts = contacts.distinct()
 
         valid_contacts = []
+        exclusions = []
         excluded = 0
         for c in contacts:
-            if not c.email or c.status != Contact.STATUS_ACTIVE:
+            reason = None
+            if not c.email:
+                reason = "missing email"
+            elif c.status == Contact.STATUS_BLOCKED:
+                reason = "blocked"
+            elif c.status == Contact.STATUS_UNSUBSCRIBED:
+                reason = "unsubscribed"
+            elif c.status == Contact.STATUS_BOUNCED:
+                reason = "bounced"
+            if reason:
                 excluded += 1
+                exclusions.append({"contact_id": c.id, "email": c.email, "reason": reason})
                 continue
             valid_contacts.append(c)
 
@@ -191,7 +220,8 @@ class EmailJobCreateSerializer(serializers.Serializer):
             status=EmailJob.STATUS_QUEUED,
             total_recipients=len(valid_contacts),
             excluded_count=excluded,
-            attachments=validated_data.get("attachments") or [],
+            exclusions=exclusions[:200],
+            attachments=self._build_attachments(validated_data),
         )
         recipients = [
             EmailRecipient(
@@ -204,3 +234,19 @@ class EmailJobCreateSerializer(serializers.Serializer):
         ]
         EmailRecipient.objects.bulk_create(recipients, batch_size=500)
         return job
+
+    def _build_attachments(self, validated_data):
+        attachment_ids = validated_data.get("attachment_ids") or []
+        attachments = validated_data.get("attachments") or []
+        if attachment_ids:
+            qs = EmailAttachment.objects.filter(id__in=attachment_ids)
+            for a in qs:
+                attachments.append(
+                    {
+                        "filename": a.filename,
+                        "content_type": a.content_type,
+                        "size": a.size,
+                        "path": a.file.name,
+                    }
+                )
+        return attachments

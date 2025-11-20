@@ -6,7 +6,17 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Textarea } from '../ui/textarea';
 import { Upload, Send } from 'lucide-react';
-import { fetchContacts, Contact, fetchContactGroups, ContactGroup, createEmailJob } from '../../lib/api';
+import { fetchContacts, Contact, fetchContactGroups, ContactGroup, createEmailJob, uploadEmailAttachment } from '../../lib/api';
+import { useRef } from 'react';
+import { EditorState, Modifier, convertToRaw, ContentState, convertFromHTML } from 'draft-js';
+import draftToHtml from 'draftjs-to-html';
+import { Editor as DraftEditor } from 'react-draft-wysiwyg';
+import 'react-draft-wysiwyg/dist/react-draft-wysiwyg.css';
+
+// Draft.js expects `global` and `process` in browser; polyfill here.
+const draftGlobals: any = globalThis as any;
+if (typeof draftGlobals.global === 'undefined') draftGlobals.global = globalThis;
+if (typeof draftGlobals.process === 'undefined') draftGlobals.process = { env: { NODE_ENV: import.meta.env.MODE || 'development' } };
 
 export function SendMessage() {
   const [channel] = useState('email');
@@ -15,10 +25,13 @@ export function SendMessage() {
   const [selectedContactIds, setSelectedContactIds] = useState<number[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<number[]>([]);
   const [subject, setSubject] = useState('');
-  const [body, setBody] = useState('');
+  const [body, setBody] = useState('<p></p>');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<{ id: number; name: string; size: number; type: string }[]>([]);
+  const [htmlMode, setHtmlMode] = useState(false);
+  const [editorState, setEditorState] = useState(() => EditorState.createEmpty());
 
   useEffect(() => {
     const load = async () => {
@@ -34,7 +47,8 @@ export function SendMessage() {
   }, []);
 
   const handleSend = async () => {
-    if (!subject.trim() || !body.trim()) {
+    const plain = draftToHtml(convertToRaw(editorState.getCurrentContent())).replace(/<[^>]+>/g, '').trim();
+    if (!subject.trim() || plain.trim().length === 0) {
       setError('Subject and body are required');
       return;
     }
@@ -46,14 +60,15 @@ export function SendMessage() {
     setError(null);
     setSuccess(null);
     try {
-      await createEmailJob({
+      const job = await createEmailJob({
         subject,
         body_html: body,
-        body_text: body,
+        body_text: plain,
         contact_ids: selectedContactIds,
         group_ids: selectedGroupIds,
+        attachment_ids: attachments.map((a) => a.id),
       });
-      setSuccess('Email queued successfully');
+    setSuccess(`Email queued successfully. Excluded: ${job.excluded_count || 0}`);
       setBody('');
       setSubject('');
       setSelectedContactIds([]);
@@ -136,29 +151,92 @@ export function SendMessage() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Subject</Label>
-              <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" />
-            </div>
+          <div className="space-y-2">
+            <Label>Subject</Label>
+            <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" />
+          </div>
 
             <div className="space-y-2">
               <Label>Body (HTML allowed)</Label>
-              <Textarea
-                placeholder="Type your email body. Supported: basic HTML."
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                rows={10}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Attachments (Optional)</Label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                <p className="text-gray-600 mb-2">Click to upload or drag and drop</p>
-                <p className="text-gray-500">PNG, JPG, PDF up to 10MB</p>
+              <div className="flex items-center justify-between mb-2 text-sm">
+                <span className="text-gray-600">Compose in rich text or switch to HTML source.</span>
+                <Button type="button" variant="outline" size="sm" onClick={() => setHtmlMode((p) => !p)}>
+                  {htmlMode ? 'Use Rich Text' : 'Edit HTML'}
+                </Button>
               </div>
+              <div className="border rounded-md p-2 bg-white min-h-[400px]">
+                {htmlMode ? (
+                  <textarea
+                    className="w-full border rounded-md p-3 min-h-[300px] font-mono text-sm"
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
+                  />
+                ) : (
+                  <DraftEditor
+                    editorState={editorState}
+                    onEditorStateChange={(state) => {
+                      setEditorState(state);
+                      setBody(draftToHtml(convertToRaw(state.getCurrentContent())));
+                    }}
+                    toolbar={{
+                      options: ['inline', 'list', 'link'],
+                      inline: { options: ['bold', 'italic', 'underline'] },
+                      list: { options: ['ordered', 'unordered'] },
+                      link: { options: ['link'] },
+                    }}
+                    editorStyle={{ minHeight: '320px', padding: '8px' }}
+                  />
+                )}
+              </div>
+            <div className="flex flex-wrap gap-2 text-sm mt-2">
+              {['{{first_name}}', '{{last_name}}', '{{full_name}}', '{{company_name}}'].map((v) => (
+                <Button
+                  key={v}
+                  size="sm"
+                  variant="outline"
+                  type="button"
+                  onClick={() => {
+                    const contentState = editorState.getCurrentContent();
+                    const selection = editorState.getSelection();
+                    const newContent = Modifier.insertText(contentState, selection, v);
+                    const newState = EditorState.push(editorState, newContent, 'insert-characters');
+                    setEditorState(EditorState.forceSelection(newState, newContent.getSelectionAfter()));
+                    setBody(draftToHtml(convertToRaw(newContent)));
+                  }}
+                >
+                  {v}
+                </Button>
+              ))}
+              </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Attachments (Optional)</Label>
+            <input
+              type="file"
+              multiple
+              onChange={async (e) => {
+                const files = Array.from(e.target.files || []);
+                for (const file of files) {
+                  try {
+                    const uploaded = await uploadEmailAttachment(file);
+                    setAttachments((prev) => [...prev, { id: uploaded.id, name: uploaded.filename, size: uploaded.size, type: uploaded.content_type }]);
+                  } catch (err: any) {
+                    setError(err?.response?.data?.file?.[0] || 'Attachment upload failed');
+                  }
+                }
+              }}
+              className="border rounded p-2"
+            />
+            <div className="flex flex-wrap gap-2">
+              {attachments.map((a) => (
+                <span key={a.id} className="px-2 py-1 text-xs rounded-full border bg-gray-50">
+                  {a.name} ({Math.round(a.size / 1024)} KB)
+                  <button className="ml-2 text-red-500" onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}>×</button>
+                </span>
+              ))}
             </div>
+          </div>
 
             <Button className="w-full" onClick={handleSend} disabled={loading}>
               <Send className="w-4 h-4 mr-2" />

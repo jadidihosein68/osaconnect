@@ -133,6 +133,7 @@ class EmailJob(models.Model):
     failed_count = models.PositiveIntegerField(default=0)
     skipped_count = models.PositiveIntegerField(default=0)
     excluded_count = models.PositiveIntegerField(default=0)
+    exclusions = models.JSONField(default=list, blank=True)
     error = models.TextField(blank=True, default="")
     attachments = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -186,3 +187,27 @@ class ProviderEvent(models.Model):
 
     class Meta:
         ordering = ["-received_at"]
+
+
+class EmailAttachment(models.Model):
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="email_attachments")
+    file = models.FileField(upload_to="email_attachments/")
+    filename = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=100, blank=True, default="")
+    size = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class ContactEngagement(models.Model):
+    contact = models.ForeignKey(Contact, on_delete=models.CASCADE, related_name="engagements")
+    channel = models.CharField(max_length=32)
+    subject = models.CharField(max_length=255, blank=True, default="")
+    status = models.CharField(max_length=32)
+    error = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]

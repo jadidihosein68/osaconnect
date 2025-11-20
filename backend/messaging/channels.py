@@ -45,7 +45,15 @@ class WhatsAppSender:
 
 
 class EmailSender:
-    def send(self, *, to: str, body: str, media_url: str | None = None, credentials: dict | None = None) -> SendResult:
+    def send(
+        self,
+        *,
+        to: str,
+        body: str,
+        media_url: str | None = None,
+        credentials: dict | None = None,
+        attachments: list | None = None,
+    ) -> SendResult:
         credentials = credentials or {}
         token = credentials.get("token")
         extra = credentials.get("extra") or {}
@@ -63,6 +71,8 @@ class EmailSender:
                 subject=subject,
                 plain_text_content=Content("text/plain", body),
             ).get()
+            if attachments:
+                mail["attachments"] = attachments
             resp = sg.client.mail.send.post(request_body=mail)
             success = resp.status_code in (200, 202)
             provider_id = resp.headers.get("X-Message-Id") if hasattr(resp, "headers") else None
