@@ -112,6 +112,7 @@ export function EmailJobDetail() {
                     <TableHead>Error</TableHead>
                     <TableHead>Sent At</TableHead>
                     <TableHead>Provider ID</TableHead>
+                    <TableHead>Attachments</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -123,11 +124,16 @@ export function EmailJobDetail() {
                       <TableCell className="text-xs text-red-600">{r.error || '—'}</TableCell>
                       <TableCell>{r.sent_at ? new Date(r.sent_at).toLocaleString() : '—'}</TableCell>
                       <TableCell className="text-xs text-gray-500 break-all">{r.provider_message_id || '—'}</TableCell>
+                      <TableCell className="text-xs text-gray-700">
+                        {(job.attachments || []).length
+                          ? (job.attachments as any[]).map((a) => a.filename || a.name).join(', ')
+                          : '—'}
+                      </TableCell>
                     </TableRow>
                   ))}
                   {(job.recipients || []).length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center text-sm text-gray-500">No recipients.</TableCell>
+                      <TableCell colSpan={7} className="text-center text-sm text-gray-500">No recipients.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>

@@ -169,6 +169,7 @@ class EmailRecipient(models.Model):
     sent_at = models.DateTimeField(null=True, blank=True)
     retry_count = models.PositiveIntegerField(default=0)
     provider_message_id = models.CharField(max_length=128, blank=True, default="")
+    signed_token = models.CharField(max_length=255, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -6,9 +6,9 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Textarea } from '../ui/textarea';
 import { Badge } from '../ui/badge';
-import { ArrowLeft, Save, Trash2, MessageSquare, Send as SendIcon, Phone, Mail } from 'lucide-react';
+import { ArrowLeft, Save, Trash2, Send as SendIcon, Phone, Mail } from 'lucide-react';
 import type { ContactPayload, Contact, ContactGroup } from '../../lib/api';
-import { createContact, fetchContact, updateContact, deleteContact, fetchContactGroups } from '../../lib/api';
+import { createContact, fetchContact, updateContact, deleteContact, fetchContactGroups, fetchContactEngagements } from '../../lib/api';
 
 const colorMap: Record<string, string> = {
   blue: '#3b82f6',
@@ -55,6 +55,7 @@ export function ContactDetail({ contactId, onBack, onSaved }: ContactDetailProps
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(isNew);
   const [availableGroups, setAvailableGroups] = useState<ContactGroup[]>([]);
+  const [engagements, setEngagements] = useState<any[]>([]);
 
   useEffect(() => {
     let ignore = false;
@@ -81,6 +82,12 @@ export function ContactDetail({ contactId, onBack, onSaved }: ContactDetailProps
         const data = await fetchContact(contactId);
         if (ignore) return;
         setContact(data);
+        try {
+          const hist = await fetchContactEngagements(contactId);
+          if (!ignore) setEngagements(hist || []);
+        } catch {
+          /* ignore */
+        }
         setForm({
           full_name: data.full_name || '',
           status: data.status || 'active',
@@ -167,29 +174,6 @@ export function ContactDetail({ contactId, onBack, onSaved }: ContactDetailProps
       setDeleting(false);
     }
   };
-
-  const messageHistory = useMemo(
-    () =>
-      contact
-        ? [
-            {
-              id: 1,
-              type: 'inbound',
-              channel: 'WhatsApp',
-              message: 'Hi, I have a question about my booking',
-              timestamp: '2 hours ago',
-            },
-            {
-              id: 2,
-              type: 'outbound',
-              channel: 'WhatsApp',
-              message: "Hello! I'd be happy to help. What would you like to know?",
-              timestamp: '2 hours ago',
-            },
-          ]
-        : [],
-    [contact],
-  );
 
   if (loading) return <p className="p-6">Loading contact...</p>;
 
@@ -332,38 +316,31 @@ export function ContactDetail({ contactId, onBack, onSaved }: ContactDetailProps
           {!isNew && (
             <Card>
               <CardHeader>
-                <CardTitle>Message History</CardTitle>
+                <CardTitle>Engagement History</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {messageHistory.map((msg) => (
-                    <div key={msg.id} className="flex gap-4">
-                      <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                          msg.type === 'inbound' ? 'bg-blue-100' : 'bg-green-100'
-                        }`}
-                      >
-                        {msg.type === 'inbound' ? (
-                          <MessageSquare className="w-5 h-5 text-blue-600" />
-                        ) : (
-                          <SendIcon className="w-5 h-5 text-green-600" />
-                        )}
+                  {engagements.map((msg) => (
+                    <div key={msg.id} className="flex gap-4 items-start">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${msg.status === 'failed' ? 'bg-red-100' : 'bg-green-100'}`}>
+                        {msg.channel === 'email' ? <Mail className="w-5 h-5 text-indigo-600" /> : <SendIcon className="w-5 h-5 text-green-600" />}
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className={`${msg.type === 'inbound' ? 'text-blue-600' : 'text-green-600'}`}>
-                            {msg.type === 'inbound' ? 'Inbound' : 'Outbound'}
+                          <span className="font-medium text-gray-900">{msg.channel.toUpperCase()}</span>
+                          <span className="text-gray-400">•</span>
+                          <span className={`capitalize ${msg.status === 'failed' ? 'text-red-600' : 'text-green-600'}`}>{msg.status}</span>
+                          <span className="text-gray-400">•</span>
+                          <span className="text-gray-500">
+                            {msg.created_at ? new Date(msg.created_at).toLocaleString() : ''}
                           </span>
-                          <span className="text-gray-400">•</span>
-                          <span className="text-gray-600">{msg.channel}</span>
-                          <span className="text-gray-400">•</span>
-                          <span className="text-gray-500">{msg.timestamp}</span>
                         </div>
-                        <p className="text-gray-900">{msg.message}</p>
+                        <p className="text-gray-800 text-sm">{msg.subject || 'N/A'}</p>
+                        {msg.error && <p className="text-xs text-red-600 mt-1">{msg.error}</p>}
                       </div>
                     </div>
                   ))}
-                  {messageHistory.length === 0 && <p className="text-gray-500 text-sm">No message history yet.</p>}
+                  {engagements.length === 0 && <p className="text-gray-500 text-sm">No engagement history yet.</p>}
                 </div>
               </CardContent>
             </Card>

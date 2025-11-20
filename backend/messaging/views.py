@@ -9,7 +9,7 @@ import logging
 from organizations.utils import get_current_org
 from organizations.permissions import IsOrgMemberWithRole
 
-from .models import InboundMessage, OutboundMessage, EmailJob, EmailAttachment
+from .models import InboundMessage, OutboundMessage, EmailJob, EmailAttachment, EmailRecipient
 from .serializers import InboundMessageSerializer, OutboundMessageSerializer, EmailJobSerializer, EmailJobCreateSerializer
 from .serializers_extra import EmailAttachmentSerializer
 from .tasks import process_email_job
@@ -103,6 +103,16 @@ class EmailJobViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
         process_email_job.delay(job.id)
         return Response(EmailJobSerializer(job).data, status=status.HTTP_201_CREATED)
 
+    @action(detail=True, methods=["post"])
+    def retry_failed(self, request, pk=None):
+        job = self.get_object()
+        job.recipients.filter(status=EmailRecipient.STATUS_FAILED).update(status=EmailRecipient.STATUS_QUEUED, error="")
+        job.status = EmailJob.STATUS_QUEUED
+        job.failed_count = 0
+        job.save(update_fields=["status", "failed_count", "updated_at"])
+        process_email_job.delay(job.id)
+        return Response({"status": "requeued"})
+
 
 class EmailAttachmentViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
     queryset = EmailAttachment.objects.all()
@@ -114,16 +124,6 @@ class EmailAttachmentViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, vie
         org = get_current_org(self.request)
         return super().get_queryset().filter(organization=org)
 
-    @action(detail=True, methods=["post"])
-    def retry_failed(self, request, pk=None):
-        job = self.get_object()
-        job.recipients.filter(status="failed").update(status="queued", error="")
-        job.status = EmailJob.STATUS_QUEUED
-        job.failed_count = 0
-        job.save(update_fields=["status", "failed_count", "updated_at"])
-        process_email_job.delay(job.id)
-        return Response({"status": "requeued"})
-
 
 @api_view(["GET"])
 def unsubscribe(request):
@@ -133,13 +133,21 @@ def unsubscribe(request):
     signer = TimestampSigner()
     try:
         raw = signer.unsign(token, max_age=60 * 60 * 24 * 7)  # 7 days
-        org_id_str, email = raw.split("|", 1)
+        parts = raw.split("|")
+        if len(parts) == 4:
+            org_id_str, email, job_id, recipient_id = parts
+        elif len(parts) == 2:
+            org_id_str, email = parts
+            job_id = recipient_id = ""
+        else:
+            raise ValueError("bad token payload")
         org_id = int(org_id_str)
     except (BadSignature, SignatureExpired, ValueError):
         html = """
         <html><body style='font-family:Arial;padding:24px;'>
         <h2 style='color:#b91c1c;'>Invalid or expired link</h2>
         <p>This unsubscribe link is invalid or has expired. Please request a new unsubscribe link.</p>
+        <a href="/" style="display:inline-block;margin-top:12px;color:#2563eb;">Return to site</a>
         </body></html>
         """
         return HttpResponse(html, status=400)
@@ -157,8 +165,11 @@ def unsubscribe(request):
 
     html = f"""
     <html><body style='font-family:Arial;padding:24px;'>
-    <h2 style='color:#15803d;'>Unsubscribed</h2>
-    <p>{email} has been unsubscribed from future emails.</p>
+    <div style='max-width:480px;margin:auto;border:1px solid #e5e7eb;border-radius:12px;padding:24px;box-shadow:0 8px 20px rgba(0,0,0,0.04);'>
+    <h2 style='color:#15803d;margin-bottom:12px;'>Unsubscribed</h2>
+    <p style='color:#111827;margin-bottom:16px;'>{email} has been unsubscribed from future emails.</p>
+    <a href="/" style="display:inline-block;padding:10px 16px;background:#111827;color:#fff;border-radius:8px;text-decoration:none;">Return to site</a>
+    </div>
     </body></html>
     """
     return HttpResponse(html)

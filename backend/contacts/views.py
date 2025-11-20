@@ -7,7 +7,12 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db import models
 
 from .models import Contact, ContactGroup
-from .serializers import ContactSerializer, IdentityConflictSerializer, ContactGroupSerializer
+from .serializers import (
+    ContactSerializer,
+    IdentityConflictSerializer,
+    ContactGroupSerializer,
+    ContactEngagementSerializer,
+)
 from organizations.utils import get_current_org
 from organizations.permissions import IsOrgMemberWithRole
 
@@ -49,6 +54,13 @@ class ContactViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         org = get_current_org(self.request)
         serializer.save(organization=org)
+
+    @action(detail=True, methods=["get"])
+    def engagements(self, request, pk=None):
+        contact = self.get_object()
+        qs = contact.engagements.all().order_by("-created_at")[:50]
+        serializer = ContactEngagementSerializer(qs, many=True)
+        return Response(serializer.data)
 
 
 class ContactGroupViewSet(viewsets.ModelViewSet):

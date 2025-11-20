@@ -237,6 +237,11 @@ export async function fetchContact(id: number | string): Promise<Contact> {
   return data;
 }
 
+export async function fetchContactEngagements(id: number | string): Promise<any[]> {
+  const { data } = await api.get(`/contacts/${id}/engagements/`);
+  return data;
+}
+
 export type ContactPayload = Partial<{
   full_name: string;
   email: string;

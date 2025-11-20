@@ -18,9 +18,14 @@ from integrations.utils import decrypt_token
 from monitoring.utils import record_alert
 from monitoring.models import MonitoringAlert
 
-DEFAULT_UNSUB_URL = getattr(settings, "UNSUBSCRIBE_URL", "")
+# Unsubscribe base prefers explicit UNSUBSCRIBE_URL, then SITE_URL fallback.
+DEFAULT_UNSUB_URL = getattr(settings, "UNSUBSCRIBE_URL", "") or getattr(settings, "SITE_URL", "")
 DEFAULT_UNSUB_MAILTO = getattr(settings, "UNSUBSCRIBE_MAILTO", "")
-FOOTER_TEXT = "If you no longer wish to receive these emails, you can unsubscribe below."
+FOOTER_TEXT = getattr(
+    settings,
+    "EMAIL_FOOTER_TEXT",
+    "If you no longer wish to receive these emails, you can unsubscribe below.",
+)
 signer = TimestampSigner()
 EMAIL_BATCH_SIZE = int(getattr(settings, "EMAIL_BATCH_SIZE", 100))
 EMAIL_BATCH_DELAY_SECONDS = int(getattr(settings, "EMAIL_BATCH_DELAY_SECONDS", 1))
@@ -187,6 +192,11 @@ def process_email_job(self, job_id: int, batch_size: int = EMAIL_BATCH_SIZE, del
                 r.status = EmailRecipient.STATUS_SENT
                 r.sent_at = timezone.now()
                 r.provider_message_id = result.provider_message_id or ""
+                try:
+                    raw = f"{job.organization_id}|{r.email}|{job.id}|{r.id}"
+                    r.signed_token = signer.sign(raw)
+                except Exception:
+                    r.signed_token = ""
                 sent += 1
                 if r.contact:
                     r.contact.last_outbound_at = timezone.now()
@@ -211,7 +221,7 @@ def process_email_job(self, job_id: int, batch_size: int = EMAIL_BATCH_SIZE, del
                         status="failed",
                         error=r.error,
                     )
-            r.save(update_fields=["status", "error", "sent_at", "updated_at"])
+            r.save(update_fields=["status", "error", "sent_at", "provider_message_id", "signed_token", "updated_at"])
         if delay_seconds:
             import time
             time.sleep(delay_seconds)
@@ -268,9 +278,13 @@ def _build_unsubscribe_link(org_id: int, recipient: EmailRecipient) -> str:
     """
     base = DEFAULT_UNSUB_URL.rstrip("/") if DEFAULT_UNSUB_URL else ""
     if base and recipient.email:
-        raw = f"{org_id}|{recipient.email}"
-        token = signer.sign(raw)
-        return f"{base}/unsubscribe/?token={token}"
+        # prefer pre-generated token (contains job+recipient ids)
+        if recipient.signed_token:
+            token = recipient.signed_token
+        else:
+            raw = f"{org_id}|{recipient.email}|{recipient.job_id}|{recipient.id}"
+            token = signer.sign(raw)
+        return f"{base.rstrip('/')}/unsubscribe/?token={token}"
     if DEFAULT_UNSUB_MAILTO:
         return f"mailto:{DEFAULT_UNSUB_MAILTO}?subject=Unsubscribe&body=Please%20unsubscribe%20{recipient.email}"
     return ""

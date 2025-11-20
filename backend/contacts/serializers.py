@@ -5,6 +5,7 @@ from rest_framework import serializers
 
 from organizations.utils import get_current_org
 from .models import Contact, IdentityConflict, ContactGroup
+from messaging.models import ContactEngagement
 
 
 class ContactGroupSerializer(serializers.ModelSerializer):
@@ -118,4 +119,11 @@ class IdentityConflictSerializer(serializers.ModelSerializer):
     class Meta:
         model = IdentityConflict
         fields = ["id", "contact", "field", "attempted_value", "created_at"]
+        read_only_fields = fields
+
+
+class ContactEngagementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContactEngagement
+        fields = ["id", "channel", "subject", "status", "error", "created_at"]
         read_only_fields = fields

@@ -64,13 +64,17 @@ class EmailSender:
             return SendResult(success=False, error="SendGrid integration missing API key or from_email")
         if "@" not in to:
             return SendResult(success=False, error="Invalid email address")
+        # Prefer HTML content (for unsubscribe button) but keep plain text fallback.
+        html_body = body
+        plain_body = body
         try:
             sg = SendGridAPIClient(api_key=token)
             mail = Mail(
                 from_email=Email(from_email),
                 to_emails=To(to),
                 subject=subject,
-                plain_text_content=Content("text/plain", body),
+                plain_text_content=Content("text/plain", plain_body),
+                html_content=Content("text/html", html_body),
             ).get()
             if attachments:
                 mail["attachments"] = attachments
