@@ -7,6 +7,8 @@ from django.utils import timezone
 from .models import OutboundMessage, Suppression, ProviderEvent
 from monitoring.utils import record_alert
 from monitoring.models import MonitoringAlert
+from .models import EmailRecipient, EmailJob
+from django.db import transaction
 
 
 class ProviderCallbackView(APIView):
@@ -77,3 +79,45 @@ class ProviderCallbackView(APIView):
             return Response({"status": "failed"})
 
         return Response({"status": "ignored", "reason": "unhandled status"}, status=202)
+
+
+class SendGridEventView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        events = request.data if isinstance(request.data, list) else []
+        failed = 0
+        updated = 0
+        for ev in events:
+            event_type = ev.get("event")
+            sg_message_id = ev.get("sg_message_id") or ""
+            if not sg_message_id:
+                continue
+            provider_id = sg_message_id.split(".")[0]
+            try:
+                with transaction.atomic():
+                    rec = EmailRecipient.objects.select_related("job", "contact").get(provider_message_id=provider_id)
+                    job = rec.job
+                    if event_type in ["bounce", "dropped", "spamreport"]:
+                        rec.status = EmailRecipient.STATUS_FAILED
+                        rec.error = ev.get("reason") or ev.get("response") or event_type
+                        rec.save(update_fields=["status", "error", "updated_at"])
+                        job.failed_count += 1
+                        job.status = EmailJob.STATUS_FAILED
+                        job.save(update_fields=["failed_count", "status", "updated_at"])
+                        failed += 1
+                        identifier = rec.email
+                        Suppression.objects.get_or_create(
+                            organization=job.organization,
+                            channel="email",
+                            identifier=identifier,
+                            defaults={"reason": event_type},
+                        )
+                    elif event_type in ["delivered"]:
+                        rec.status = EmailRecipient.STATUS_SENT
+                        rec.save(update_fields=["status", "updated_at"])
+                        updated += 1
+            except EmailRecipient.DoesNotExist:
+                continue
+        return Response({"status": "ok", "failed_updated": failed, "updated": updated})

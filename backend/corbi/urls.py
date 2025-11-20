@@ -13,7 +13,7 @@ from monitoring.views import HealthcheckView, MetricsView, MonitoringSummaryView
 from organizations.views import MembershipViewSet
 from templates_app.views import MessageTemplateViewSet
 from messaging.webhooks import InboundWebhookView
-from messaging.callbacks import ProviderCallbackView
+from messaging.callbacks import ProviderCallbackView, SendGridEventView
 from integrations.views import IntegrationListView, IntegrationConnectView, IntegrationDisconnectView
 from integrations.test import IntegrationTestView
 from billing.views import BillingLogViewSet
@@ -35,6 +35,7 @@ urlpatterns = [
     path("api/", include(router.urls)),
     path("api/webhooks/<str:channel>/", InboundWebhookView.as_view(), name="inbound_webhook"),
     path("api/callbacks/<str:channel>/", ProviderCallbackView.as_view(), name="provider_callback"),
+    path("api/callbacks/sendgrid/", SendGridEventView.as_view(), name="sendgrid_events"),
     path("api/assistant/", AssistantView.as_view(), name="assistant"),
     path("unsubscribe/", unsubscribe, name="unsubscribe"),
     path("health/", HealthcheckView.as_view(), name="healthcheck"),

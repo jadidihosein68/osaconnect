@@ -9,6 +9,8 @@ from .models import InboundMessage, OutboundMessage, EmailJob, EmailRecipient, E
 from urllib.parse import urlparse
 import logging
 from organizations.utils import get_current_org
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
 
 audit_logger = logging.getLogger("corbi.audit")
 
@@ -105,8 +107,8 @@ class InboundMessageSerializer(serializers.ModelSerializer):
 class EmailRecipientSerializer(serializers.ModelSerializer):
     class Meta:
         model = EmailRecipient
-        fields = ["id", "contact", "email", "full_name", "status", "error", "sent_at"]
-        read_only_fields = ["status", "error", "sent_at", "contact"]
+        fields = ["id", "contact", "email", "full_name", "status", "error", "sent_at", "provider_message_id"]
+        read_only_fields = ["status", "error", "sent_at", "contact", "provider_message_id"]
 
 
 class EmailJobSerializer(serializers.ModelSerializer):
@@ -196,12 +198,18 @@ class EmailJobCreateSerializer(serializers.Serializer):
             reason = None
             if not c.email:
                 reason = "missing email"
-            elif c.status == Contact.STATUS_BLOCKED:
-                reason = "blocked"
-            elif c.status == Contact.STATUS_UNSUBSCRIBED:
-                reason = "unsubscribed"
-            elif c.status == Contact.STATUS_BOUNCED:
-                reason = "bounced"
+            else:
+                try:
+                    validate_email(c.email)
+                except ValidationError:
+                    reason = "invalid email"
+            if reason is None:
+                if c.status == Contact.STATUS_BLOCKED:
+                    reason = "blocked"
+                elif c.status == Contact.STATUS_UNSUBSCRIBED:
+                    reason = "unsubscribed"
+                elif c.status == Contact.STATUS_BOUNCED:
+                    reason = "bounced"
             if reason:
                 excluded += 1
                 exclusions.append({"contact_id": c.id, "email": c.email, "reason": reason})

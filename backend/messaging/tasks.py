@@ -186,6 +186,7 @@ def process_email_job(self, job_id: int, batch_size: int = EMAIL_BATCH_SIZE, del
             if result.success:
                 r.status = EmailRecipient.STATUS_SENT
                 r.sent_at = timezone.now()
+                r.provider_message_id = result.provider_message_id or ""
                 sent += 1
                 if r.contact:
                     r.contact.last_outbound_at = timezone.now()
@@ -201,6 +202,7 @@ def process_email_job(self, job_id: int, batch_size: int = EMAIL_BATCH_SIZE, del
                 r.status = EmailRecipient.STATUS_FAILED
                 r.error = result.error or "Send failed"
                 failed += 1
+                r.provider_message_id = result.provider_message_id or ""
                 if r.contact:
                     ContactEngagement.objects.create(
                         contact=r.contact,

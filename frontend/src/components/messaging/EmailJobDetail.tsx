@@ -111,6 +111,7 @@ export function EmailJobDetail() {
                     <TableHead>Status</TableHead>
                     <TableHead>Error</TableHead>
                     <TableHead>Sent At</TableHead>
+                    <TableHead>Provider ID</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -121,6 +122,7 @@ export function EmailJobDetail() {
                       <TableCell className="capitalize">{r.status}</TableCell>
                       <TableCell className="text-xs text-red-600">{r.error || '—'}</TableCell>
                       <TableCell>{r.sent_at ? new Date(r.sent_at).toLocaleString() : '—'}</TableCell>
+                      <TableCell className="text-xs text-gray-500 break-all">{r.provider_message_id || '—'}</TableCell>
                     </TableRow>
                   ))}
                   {(job.recipients || []).length === 0 && (

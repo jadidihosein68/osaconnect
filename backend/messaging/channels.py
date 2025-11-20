@@ -8,6 +8,7 @@ from sendgrid.helpers.mail import Mail, Email, To, Content
 from telegram import Bot
 import asyncio
 import requests
+import uuid
 
 
 @dataclass
@@ -75,7 +76,11 @@ class EmailSender:
                 mail["attachments"] = attachments
             resp = sg.client.mail.send.post(request_body=mail)
             success = resp.status_code in (200, 202)
-            provider_id = resp.headers.get("X-Message-Id") if hasattr(resp, "headers") else None
+            provider_id = None
+            if hasattr(resp, "headers") and resp.headers:
+                provider_id = resp.headers.get("X-Message-Id") or resp.headers.get("x-message-id")
+            if not provider_id:
+                provider_id = str(uuid.uuid4())
             return SendResult(success=success, provider_message_id=provider_id, error=None if success else resp.body)
         except Exception as exc:
             return SendResult(success=False, error=str(exc))
