@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { login } from '../lib/api';
 
 interface LoginProps {
-  onLogin: (token: string) => void;
+  onLogin: (token: string, username: string) => void;
   loading?: boolean;
   memberships?: any[];
 }
@@ -23,7 +23,7 @@ export function Login({ onLogin }: LoginProps) {
     setIsSubmitting(true);
     try {
       const data = await login(username, password);
-      onLogin(data.access);
+      onLogin(data.access, username);
     } catch (err) {
       setError('Invalid credentials');
     } finally {

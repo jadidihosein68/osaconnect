@@ -30,19 +30,40 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
   const [orgId, setOrgId] = useState<number | null>(null);
   const [loadingMemberships, setLoadingMemberships] = useState(false);
   const [ready, setReady] = useState(false);
+  const [userName, setUserName] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleLogin = async (token: string) => {
+  const deriveUserFromMembership = (membership?: Membership) => {
+    if (!membership || !membership.user) return { name: null as string | null, email: null as string | null };
+    const { first_name, last_name, username, email } = membership.user as any;
+    const fullName = [first_name, last_name].filter(Boolean).join(' ').trim();
+    return {
+      name: fullName || username || email || null,
+      email: email || null,
+    };
+  };
+
+  const handleLogin = async (token: string, username: string) => {
     setAuth(token);
     onAuthPersist?.(token);
     localStorage.setItem('corbi_token', token);
+    localStorage.setItem('corbi_user', username);
+    // email will be hydrated from memberships call below
+    setUserName(username);
     setLoadingMemberships(true);
     try {
       const orgs = await fetchMemberships();
       setMemberships(orgs);
       if (orgs.length > 0) {
         const selectedOrg = orgs[0].organization.id;
+        const userInfo = deriveUserFromMembership(orgs[0]);
+        if (userInfo.name) setUserName(userInfo.name);
+        if (userInfo.email) {
+          setUserEmail(userInfo.email);
+          localStorage.setItem('corbi_email', userInfo.email);
+        }
         setOrgId(selectedOrg);
         setOrg(selectedOrg);
         onAuthPersist?.(token, selectedOrg);
@@ -64,14 +85,26 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
   useEffect(() => {
     const token = localStorage.getItem('corbi_token');
     const storedOrg = localStorage.getItem('corbi_org');
+    const storedUser = localStorage.getItem('corbi_user');
+    const storedEmail = localStorage.getItem('corbi_email');
     const hydrate = async () => {
       if (token) {
         setAuth(token);
         setIsLoggedIn(true);
+        if (storedUser) setUserName(storedUser);
+        if (storedEmail) setUserEmail(storedEmail);
         setLoadingMemberships(true);
         try {
           const orgs = await fetchMemberships();
           setMemberships(orgs);
+          if (orgs.length > 0) {
+            const userInfo = deriveUserFromMembership(orgs[0]);
+            if (userInfo.name) setUserName(userInfo.name);
+            if (userInfo.email) {
+              setUserEmail(userInfo.email);
+              localStorage.setItem('corbi_email', userInfo.email);
+            }
+          }
           const selectedOrg = storedOrg || (orgs[0]?.organization.id ? String(orgs[0].organization.id) : null);
           if (selectedOrg) {
             const orgNum = Number(selectedOrg);
@@ -132,12 +165,17 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
       organizations={memberships.map((m) => m.organization)}
       currentOrgId={orgId}
       onOrgChange={handleOrgChange}
-      onNavigate={(screen) => navigate(screen)}
-      onLogout={() => {
-        setIsLoggedIn(false);
-        navigate('/login', { replace: true });
-      }}
-    >
+          onNavigate={(screen) => navigate(screen)}
+          onLogout={() => {
+            localStorage.removeItem('corbi_user');
+            localStorage.removeItem('corbi_email');
+            setUserEmail(null);
+            setIsLoggedIn(false);
+            navigate('/login', { replace: true });
+          }}
+          userName={userName || userEmail || 'User'}
+          userEmail={userEmail || undefined}
+        >
       <Routes>
         <Route path="/login" element={<Login onLogin={handleLogin} loading={loadingMemberships} memberships={memberships} />} />
         <Route path="/" element={<Dashboard onNavigate={(path) => navigate(path)} orgId={orgId} isLoggedIn={isLoggedIn} />} />

@@ -1,16 +1,16 @@
-import { 
-  LayoutDashboard, 
-  Users, 
-  Send, 
-  Inbox, 
-  FileText, 
-  Bot, 
-  Calendar, 
-  Activity, 
+import {
+  LayoutDashboard,
+  Users,
+  Send,
+  Inbox,
+  FileText,
+  Bot,
+  Calendar,
+  Activity,
   Settings as SettingsIcon,
   LogOut,
   MessageSquare,
-  BarChart3
+  BarChart3,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';
@@ -23,9 +23,18 @@ interface LayoutProps {
   organizations?: { id: number; name: string }[];
   currentOrgId?: number | null;
   onOrgChange?: (orgId: number) => void;
+  userName?: string;
+  userEmail?: string;
 }
 
-export function Layout({ children, currentScreen, onNavigate, onLogout, organizations = [], currentOrgId, onOrgChange }: LayoutProps) {
+function getInitials(name?: string) {
+  if (!name) return 'U';
+  const parts = name.trim().split(' ');
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+export function Layout({ children, currentScreen, onNavigate, onLogout, organizations = [], currentOrgId, onOrgChange, userName, userEmail }: LayoutProps) {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'contacts', label: 'Contacts', icon: Users },
@@ -131,6 +140,15 @@ export function Layout({ children, currentScreen, onNavigate, onLogout, organiza
                   ))}
                 </select>
               )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback>{getInitials(userName)}</AvatarFallback>
+              </Avatar>
+              <div className="text-sm text-gray-800 hidden sm:block">
+                <div className="font-medium">{userName || 'User'}</div>
+                {userEmail && <div className="text-gray-500 text-xs">{userEmail}</div>}
+              </div>
             </div>
             <Button
               variant="ghost"
