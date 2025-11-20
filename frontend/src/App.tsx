@@ -16,6 +16,7 @@ import { BookingDetail } from './components/bookings/BookingDetail';
 import { OutboundLogs } from './components/monitoring/OutboundLogs';
 import { MonitoringDashboard } from './components/monitoring/MonitoringDashboard';
 import { Settings } from './components/settings/Settings';
+import { Billing } from './components/billing/Billing';
 import { Layout } from './components/Layout';
 import { fetchMemberships, setAuth, setOrg, Membership } from './lib/api';
 
@@ -169,6 +170,8 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
           onLogout={() => {
             localStorage.removeItem('corbi_user');
             localStorage.removeItem('corbi_email');
+            localStorage.removeItem('corbi_token');
+            localStorage.removeItem('corbi_refresh');
             setUserEmail(null);
             setIsLoggedIn(false);
             navigate('/login', { replace: true });
@@ -219,6 +222,7 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
         <Route path="/assistant" element={<AIAssistant />} />
         <Route path="/monitoring/outbound" element={<OutboundLogs />} />
         <Route path="/monitoring" element={<MonitoringDashboard />} />
+        <Route path="/billing" element={<Billing />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

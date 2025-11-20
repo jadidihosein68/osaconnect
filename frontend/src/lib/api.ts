@@ -68,8 +68,27 @@ export interface Booking {
   location?: string;
 }
 
-let authToken = "";
-let orgId: number | null = null;
+export interface BillingLog {
+  id: number;
+  timestamp: string;
+  feature_tag: string;
+  model: string;
+  mode?: string;
+  tokens_prompt?: number | null;
+  tokens_completion?: number | null;
+  tokens_total?: number | null;
+  raw_cost?: number | null;
+  billable_cost?: number | null;
+  currency: string;
+  request_id?: string;
+  status: string;
+  metadata?: Record<string, unknown>;
+  error?: string;
+}
+
+let authToken = localStorage.getItem("corbi_token") || "";
+let refreshToken = localStorage.getItem("corbi_refresh") || "";
+let orgId: number | null = localStorage.getItem("corbi_org") ? Number(localStorage.getItem("corbi_org")) : null;
 
 const api = axios.create({
   baseURL: "/api",
@@ -87,20 +106,64 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+let isRefreshing = false;
+let refreshPromise: Promise<string> | null = null;
+
+async function refreshAccessToken(): Promise<string> {
+  if (!refreshToken) throw new Error("No refresh token available");
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = api
+    .post("/auth/token/refresh/", { refresh: refreshToken })
+    .then(({ data }) => {
+      const newAccess = data.access;
+      authToken = newAccess;
+      if (newAccess) {
+        localStorage.setItem("corbi_token", newAccess);
+      }
+      return newAccess;
+    })
+    .finally(() => {
+      isRefreshing = false;
+      refreshPromise = null;
+    });
+  return refreshPromise;
+}
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error?.response?.status === 401) {
-      localStorage.removeItem("corbi_token");
-      localStorage.removeItem("corbi_org");
-      window.location.href = "/login";
+  async (error) => {
+    const originalRequest = error.config;
+    const isExpired =
+      error?.response?.status === 401 &&
+      (error?.response?.data?.code === "token_not_valid" || /expired/i.test(error?.response?.data?.detail || ""));
+
+    if (isExpired && refreshToken && !originalRequest._retry) {
+      originalRequest._retry = true;
+      try {
+        const newAccess = await refreshAccessToken();
+        if (newAccess) {
+          originalRequest.headers = originalRequest.headers || {};
+          originalRequest.headers.Authorization = `Bearer ${newAccess}`;
+          return api(originalRequest);
+        }
+      } catch (refreshErr) {
+        localStorage.removeItem("corbi_token");
+        localStorage.removeItem("corbi_refresh");
+      }
     }
     return Promise.reject(error);
   },
 );
 
-export function setAuth(token: string, organization?: number) {
+export function setAuth(token: string, organization?: number, refresh?: string) {
   authToken = token;
+  if (token) {
+    localStorage.setItem("corbi_token", token);
+  }
+  if (refresh) {
+    refreshToken = refresh;
+    localStorage.setItem("corbi_refresh", refresh);
+  }
   if (organization) orgId = organization;
 }
 
@@ -110,7 +173,7 @@ export function setOrg(id: number) {
 
 export async function login(username: string, password: string) {
   const { data } = await api.post("/auth/token/", { username, password });
-  setAuth(data.access);
+  setAuth(data.access, undefined, data.refresh);
   return data;
 }
 
@@ -216,6 +279,11 @@ export async function linkInboundContact(id: number | string, payload: { contact
 
 export async function fetchBookings(): Promise<Booking[]> {
   const { data } = await api.get("/bookings/");
+  return data;
+}
+
+export async function fetchBillingLogs(): Promise<BillingLog[]> {
+  const { data } = await api.get("/billing/logs/");
   return data;
 }
 

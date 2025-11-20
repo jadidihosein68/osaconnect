@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   Users,
+  CreditCard,
   Send,
   Inbox,
   FileText,
@@ -53,6 +54,7 @@ export function Layout({ children, currentScreen, onNavigate, onLogout, organiza
     { id: 'bookings', label: 'Bookings', icon: Calendar },
     { id: 'outbound-logs', label: 'Outbound Logs', icon: Send },
     { id: 'monitoring', label: 'Monitoring', icon: BarChart3 },
+    { id: 'billing', label: 'Billing', icon: CreditCard },
     { id: 'settings', label: 'Settings', icon: SettingsIcon },
   ];
 
@@ -88,7 +90,9 @@ export function Layout({ children, currentScreen, onNavigate, onLogout, organiza
                 <button
                   onClick={() => onNavigate(item.id)}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                    currentScreen === item.id || currentScreen.startsWith(item.id)
+                    currentScreen === item.id ||
+                    currentScreen.startsWith(item.id) ||
+                    currentScreen.startsWith(`/${item.id}`)
                       ? 'bg-indigo-50 text-indigo-600'
                       : 'text-gray-700 hover:bg-gray-100'
                   }`}

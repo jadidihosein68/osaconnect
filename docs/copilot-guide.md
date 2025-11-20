@@ -70,6 +70,7 @@ npm run dev  # http://localhost:5173 proxied to backend
 - Metrics: aggregates counts/failures/retrying and today aggregates; monitoring summary provides today totals, success rate, inbound today.
 - Bookings: Google Calendar integration creates/updates/deletes events using stored OAuth token + calendar_id.
 - Assistant: now requires auth/org and returns KB snippets; replace with real LLM provider when ready.
+- Billing: `/api/billing/logs/` (list/create) and `/api/billing/logs/{id}/result/` (update status/tokens/cost). Records per-call AI usage with org scoping, feature_tag, model, tokens, raw_cost, billable_cost. Log a row on dispatch (`status=sent`), then update on success/fail/cancel. Filterable by feature_tag/model/status/date range.
 
 ## Known Gaps vs PRD (future work)
 - Deeper provider coverage: rich media, per-channel compliance rules, delivery receipts beyond current adapters.
@@ -78,6 +79,7 @@ npm run dev  # http://localhost:5173 proxied to backend
 - Calendar provider real integration (Google/Microsoft) and user-facing confirmations.
 - AI assistant: real retrieval + LLM with safety/guardrails replacing stub.
 - Monitoring dashboard UI, structured logging, alerting, callback latency.
+- Billing summaries/dashboards, markup configuration per org, and validation allowlists per feature/model.
 
 ## Debug Pointers
 - If 401s occur in the UI, re-login; 401 auto-clears token and redirects.

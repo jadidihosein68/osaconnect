@@ -16,6 +16,7 @@ from messaging.webhooks import InboundWebhookView
 from messaging.callbacks import ProviderCallbackView
 from integrations.views import IntegrationListView, IntegrationConnectView, IntegrationDisconnectView
 from integrations.test import IntegrationTestView
+from billing.views import BillingLogViewSet
 
 router = routers.DefaultRouter()
 router.register(r"contacts", ContactViewSet, basename="contact")
@@ -24,6 +25,7 @@ router.register(r"outbound", OutboundMessageViewSet, basename="outbound")
 router.register(r"inbound", InboundMessageViewSet, basename="inbound")
 router.register(r"bookings", BookingViewSet, basename="booking")
 router.register(r"memberships", MembershipViewSet, basename="membership")
+router.register(r"billing/logs", BillingLogViewSet, basename="billing-log")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
