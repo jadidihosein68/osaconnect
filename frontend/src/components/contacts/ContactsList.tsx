@@ -5,7 +5,7 @@ import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Search, Plus, Eye, Trash2 } from 'lucide-react';
 import { Badge } from '../ui/badge';
-import { fetchContacts, Contact, deleteContact } from '../../lib/api';
+import { fetchContacts, Contact, deleteContact, fetchContactGroups, ContactGroup } from '../../lib/api';
 
 interface ContactsListProps {
   onViewContact: (id: string) => void;
@@ -13,11 +13,21 @@ interface ContactsListProps {
 }
 
 const PAGE_SIZE = 10;
+const colorMap: Record<string, string> = {
+  blue: '#3b82f6',
+  green: '#22c55e',
+  orange: '#f97316',
+  purple: '#a855f7',
+  teal: '#14b8a6',
+  gray: '#9ca3af',
+};
 
 export function ContactsList({ onViewContact, onCreateContact }: ContactsListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [groupFilter, setGroupFilter] = useState('all');
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [groups, setGroups] = useState<ContactGroup[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -30,6 +40,8 @@ export function ContactsList({ onViewContact, onCreateContact }: ContactsListPro
       try {
         const data = await fetchContacts();
         setContacts(data);
+        const groupData = await fetchContactGroups();
+        setGroups(groupData);
       } catch (e) {
         setError('Failed to load contacts');
       } finally {
@@ -41,7 +53,7 @@ export function ContactsList({ onViewContact, onCreateContact }: ContactsListPro
 
   useEffect(() => {
     setPage(1);
-  }, [searchQuery, statusFilter]);
+  }, [searchQuery, statusFilter, groupFilter]);
 
   const filtered = useMemo(
     () =>
@@ -50,9 +62,11 @@ export function ContactsList({ onViewContact, onCreateContact }: ContactsListPro
           c.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
           (c.email || '').toLowerCase().includes(searchQuery.toLowerCase());
         const matchesStatus = statusFilter === 'all' ? true : c.status === statusFilter;
-        return matchesSearch && matchesStatus;
+        const groupIds = (c.groups as any)?.map((g: any) => (typeof g === 'number' ? g : g.id)) || [];
+        const matchesGroup = groupFilter === 'all' ? true : groupIds.includes(Number(groupFilter));
+        return matchesSearch && matchesStatus && matchesGroup;
       }),
-    [contacts, searchQuery, statusFilter],
+    [contacts, searchQuery, statusFilter, groupFilter],
   );
 
   const getStatusColor = (status: string) => {
@@ -130,6 +144,19 @@ export function ContactsList({ onViewContact, onCreateContact }: ContactsListPro
                 <SelectItem value="bounced">Bounced</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={groupFilter} onValueChange={setGroupFilter}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Filter by group" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Groups</SelectItem>
+                {groups.map((g) => (
+                  <SelectItem key={g.id} value={String(g.id)}>
+                    {g.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
@@ -153,6 +180,7 @@ export function ContactsList({ onViewContact, onCreateContact }: ContactsListPro
                       <th className="text-left py-3 px-4 text-gray-600">Phone</th>
                       <th className="text-left py-3 px-4 text-gray-600">Email</th>
                       <th className="text-left py-3 px-4 text-gray-600">Telegram</th>
+                      <th className="text-left py-3 px-4 text-gray-600">Groups</th>
                       <th className="text-left py-3 px-4 text-gray-600">Instagram</th>
                       <th className="text-left py-3 px-4 text-gray-600">Status</th>
                       <th className="text-left py-3 px-4 text-gray-600">Last Inbound</th>
@@ -167,6 +195,34 @@ export function ContactsList({ onViewContact, onCreateContact }: ContactsListPro
                         <td className="py-3 px-4 text-gray-600">{contact.phone_whatsapp || '-'}</td>
                         <td className="py-3 px-4 text-gray-600">{contact.email || '-'}</td>
                         <td className="py-3 px-4 text-gray-600">{contact.telegram_chat_id || '-'}</td>
+                        <td className="py-3 px-4 text-gray-600">
+                          <div className="flex flex-wrap gap-1">
+                            {(() => {
+                              const groupObjs =
+                                (contact.groups as any)?.map((g: any) =>
+                                  typeof g === 'number' ? groups.find((gg) => gg.id === g) || { id: g, name: `Group ${g}` } : g,
+                                ) || [];
+                              if (groupObjs.length === 0) return <span className="text-gray-400">-</span>;
+                              const display = groupObjs.slice(0, 3);
+                              return (
+                                <>
+                                  {display.map((g: any) => (
+                                    <span
+                                      key={g.id}
+                                      className="px-2 py-1 text-xs rounded-full border"
+                                      style={{ borderColor: colorMap[g.color || 'gray'] || '#d1d5db', color: '#111827' }}
+                                    >
+                                      {g.name}
+                                    </span>
+                                  ))}
+                                  {groupObjs.length > 3 && (
+                                    <span className="text-xs text-gray-500">+{groupObjs.length - 3} more</span>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </td>
                         <td className="py-3 px-4 text-gray-600">{contact.instagram_scoped_id || '-'}</td>
                         <td className="py-3 px-4">
                           <Badge className={`${getStatusColor(contact.status)} text-white`}>

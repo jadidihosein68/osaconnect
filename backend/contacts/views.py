@@ -3,9 +3,11 @@ from __future__ import annotations
 from rest_framework import filters, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django_filters.rest_framework import DjangoFilterBackend
+from django.db import models
 
-from .models import Contact
-from .serializers import ContactSerializer, IdentityConflictSerializer
+from .models import Contact, ContactGroup
+from .serializers import ContactSerializer, IdentityConflictSerializer, ContactGroupSerializer
 from organizations.utils import get_current_org
 from organizations.permissions import IsOrgMemberWithRole
 
@@ -14,8 +16,9 @@ class ContactViewSet(viewsets.ModelViewSet):
     queryset = Contact.objects.all()
     serializer_class = ContactSerializer
     permission_classes = [IsOrgMemberWithRole]
-    filter_backends = [filters.SearchFilter]
+    filter_backends = [filters.SearchFilter, DjangoFilterBackend]
     search_fields = ["full_name", "email", "phone_whatsapp", "telegram_chat_id", "instagram_scoped_id", "tags"]
+    filterset_fields = ["status", "groups"]
 
     @action(detail=True, methods=["post"])
     def mark_inbound(self, request, pk=None):
@@ -41,8 +44,23 @@ class ContactViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         org = get_current_org(self.request)
-        return super().get_queryset().filter(organization=org)
+        return super().get_queryset().filter(organization=org).prefetch_related("groups")
 
     def perform_create(self, serializer):
         org = get_current_org(self.request)
         serializer.save(organization=org)
+
+
+class ContactGroupViewSet(viewsets.ModelViewSet):
+    queryset = ContactGroup.objects.all()
+    serializer_class = ContactGroupSerializer
+    permission_classes = [IsOrgMemberWithRole]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["name", "description"]
+
+    def get_queryset(self):
+        org = get_current_org(self.request)
+        return ContactGroup.objects.filter(organization=org).annotate(contacts_count=models.Count("contacts"))
+
+    def perform_create(self, serializer):
+        serializer.save()

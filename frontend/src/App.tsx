@@ -17,6 +17,7 @@ import { OutboundLogs } from './components/monitoring/OutboundLogs';
 import { MonitoringDashboard } from './components/monitoring/MonitoringDashboard';
 import { Settings } from './components/settings/Settings';
 import { Billing } from './components/billing/Billing';
+import { GroupsPage } from './components/contacts/GroupsPage';
 import { Layout } from './components/Layout';
 import { fetchMemberships, setAuth, setOrg, Membership } from './lib/api';
 
@@ -196,6 +197,7 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
           element={<ContactDetail contactId="new" onBack={() => navigate('/contacts')} onSaved={handleContactSaved} />}
         />
         <Route path="/contacts/:id" element={<ContactDetailPage />} />
+        <Route path="/contacts/groups" element={<GroupsPage />} />
         <Route
           path="/templates"
           element={

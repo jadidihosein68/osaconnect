@@ -3,6 +3,36 @@ from __future__ import annotations
 from django.core.validators import validate_email
 from django.db import models
 from django.utils import timezone
+from organizations.models import Organization
+
+
+COLOR_CHOICES = [
+    ("blue", "Blue"),
+    ("green", "Green"),
+    ("orange", "Orange"),
+    ("purple", "Purple"),
+    ("teal", "Teal"),
+    ("gray", "Gray"),
+]
+
+
+class ContactGroup(models.Model):
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="contact_groups")
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    color = models.CharField(max_length=20, choices=COLOR_CHOICES, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        "auth.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="created_contact_groups"
+    )
+
+    class Meta:
+        unique_together = ("organization", "name")
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return f"{self.name}"
 
 
 class Contact(models.Model):
@@ -28,6 +58,7 @@ class Contact(models.Model):
     tags = models.JSONField(default=list, blank=True)
     notes = models.TextField(blank=True, default="")
     metadata = models.JSONField(default=dict, blank=True)
+    groups = models.ManyToManyField(ContactGroup, related_name="contacts", blank=True)
     last_inbound_at = models.DateTimeField(blank=True, null=True)
     last_outbound_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)

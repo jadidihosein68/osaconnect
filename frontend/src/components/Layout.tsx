@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';
+import { useState } from 'react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -36,9 +37,19 @@ function getInitials(name?: string) {
 }
 
 export function Layout({ children, currentScreen, onNavigate, onLogout, organizations = [], currentOrgId, onOrgChange, userName, userEmail }: LayoutProps) {
+  const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({ contacts: true });
+
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'contacts', label: 'Contacts', icon: Users },
+    {
+      id: 'contacts',
+      label: 'Contacts',
+      icon: Users,
+      submenu: [
+        { id: '/contacts', label: 'All Contacts' },
+        { id: '/contacts/groups', label: 'Groups' },
+      ],
+    },
     { 
       id: 'messaging', 
       label: 'Messaging', 
@@ -88,7 +99,13 @@ export function Layout({ children, currentScreen, onNavigate, onLogout, organiza
             {menuItems.map((item) => (
               <li key={item.id}>
                 <button
-                  onClick={() => onNavigate(item.id)}
+                  onClick={() => {
+                    if (item.submenu) {
+                      setOpenSections((prev) => ({ ...prev, [item.id]: !prev[item.id] }));
+                    } else {
+                      onNavigate(item.id.startsWith('/') ? item.id : `/${item.id}`);
+                    }
+                  }}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
                     currentScreen === item.id ||
                     currentScreen.startsWith(item.id) ||
@@ -100,12 +117,12 @@ export function Layout({ children, currentScreen, onNavigate, onLogout, organiza
                   <item.icon className="w-5 h-5" />
                   <span>{item.label}</span>
                 </button>
-                {item.submenu && (
+                {item.submenu && openSections[item.id] && (
                   <ul className="ml-8 mt-1 space-y-1">
                     {item.submenu.map((subitem) => (
                       <li key={subitem.id}>
                         <button
-                          onClick={() => onNavigate(subitem.id)}
+                          onClick={() => onNavigate(subitem.id.startsWith('/') ? subitem.id : `/${subitem.id}`)}
                           className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
                             currentScreen === subitem.id
                               ? 'bg-indigo-50 text-indigo-600'

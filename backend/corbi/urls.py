@@ -7,7 +7,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from assistant.views import AssistantView
 from bookings.views import BookingViewSet
-from contacts.views import ContactViewSet
+from contacts.views import ContactViewSet, ContactGroupViewSet
 from messaging.views import InboundMessageViewSet, OutboundMessageViewSet
 from monitoring.views import HealthcheckView, MetricsView, MonitoringSummaryView, SettingsView, MonitoringDetailView, MonitoringEventsView, MonitoringAlertsView
 from organizations.views import MembershipViewSet
@@ -20,6 +20,7 @@ from billing.views import BillingLogViewSet
 
 router = routers.DefaultRouter()
 router.register(r"contacts", ContactViewSet, basename="contact")
+router.register(r"contact-groups", ContactGroupViewSet, basename="contact-group")
 router.register(r"templates", MessageTemplateViewSet, basename="template")
 router.register(r"outbound", OutboundMessageViewSet, basename="outbound")
 router.register(r"inbound", InboundMessageViewSet, basename="inbound")

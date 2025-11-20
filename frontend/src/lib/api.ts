@@ -23,6 +23,15 @@ export interface Contact {
   tags?: string[];
   last_inbound_at?: string;
   last_outbound_at?: string;
+  groups?: number[] | ContactGroup[];
+}
+
+export interface ContactGroup {
+  id: number;
+  name: string;
+  description?: string;
+  color?: string;
+  contacts_count?: number;
 }
 
 export interface Template {
@@ -202,6 +211,7 @@ export type ContactPayload = Partial<{
   notes: string;
   segments: string[];
   tags: string[];
+  groups: number[];
 }>;
 
 export async function createContact(payload: ContactPayload): Promise<Contact> {
@@ -255,6 +265,25 @@ export async function updateTemplate(id: number | string, payload: Partial<Templ
 
 export async function deleteTemplate(id: number | string) {
   await api.delete(`/templates/${id}/`);
+}
+
+export async function fetchContactGroups(): Promise<ContactGroup[]> {
+  const { data } = await api.get("/contact-groups/");
+  return data;
+}
+
+export async function createContactGroup(payload: Partial<ContactGroup>): Promise<ContactGroup> {
+  const { data } = await api.post("/contact-groups/", payload);
+  return data;
+}
+
+export async function updateContactGroup(id: number | string, payload: Partial<ContactGroup>): Promise<ContactGroup> {
+  const { data } = await api.patch(`/contact-groups/${id}/`, payload);
+  return data;
+}
+
+export async function deleteContactGroup(id: number | string) {
+  await api.delete(`/contact-groups/${id}/`);
 }
 
 export async function fetchOutbound(): Promise<OutboundMessage[]> {

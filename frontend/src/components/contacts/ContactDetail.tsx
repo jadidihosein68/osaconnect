@@ -7,8 +7,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from '../ui/textarea';
 import { Badge } from '../ui/badge';
 import { ArrowLeft, Save, Trash2, MessageSquare, Send as SendIcon, Phone, Mail } from 'lucide-react';
-import type { ContactPayload, Contact } from '../../lib/api';
-import { createContact, fetchContact, updateContact, deleteContact } from '../../lib/api';
+import type { ContactPayload, Contact, ContactGroup } from '../../lib/api';
+import { createContact, fetchContact, updateContact, deleteContact, fetchContactGroups } from '../../lib/api';
+
+const colorMap: Record<string, string> = {
+  blue: '#3b82f6',
+  green: '#22c55e',
+  orange: '#f97316',
+  purple: '#a855f7',
+  teal: '#14b8a6',
+  gray: '#9ca3af',
+};
 
 interface ContactDetailProps {
   contactId: string | null;
@@ -33,6 +42,7 @@ const EMPTY_FORM: Required<ContactPayload> = {
   notes: '',
   segments: [],
   tags: [],
+  groups: [],
 };
 
 export function ContactDetail({ contactId, onBack, onSaved }: ContactDetailProps) {
@@ -44,10 +54,19 @@ export function ContactDetail({ contactId, onBack, onSaved }: ContactDetailProps
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(isNew);
+  const [availableGroups, setAvailableGroups] = useState<ContactGroup[]>([]);
 
   useEffect(() => {
     let ignore = false;
     const load = async () => {
+      // load groups for org
+      try {
+        const groups = await fetchContactGroups();
+        if (!ignore) setAvailableGroups(groups);
+      } catch {
+        /* ignore */
+      }
+
       if (!contactId || contactId === 'new') {
         setContact(null);
         setForm(EMPTY_FORM);
@@ -72,6 +91,7 @@ export function ContactDetail({ contactId, onBack, onSaved }: ContactDetailProps
           notes: data.notes || '',
           segments: data.segments || [],
           tags: data.tags || [],
+          groups: (data.groups as number[] | ContactGroup[] | undefined)?.map((g: any) => (typeof g === 'number' ? g : g.id)) || [],
         });
         setIsEditing(false);
       } catch {
@@ -111,19 +131,27 @@ export function ContactDetail({ contactId, onBack, onSaved }: ContactDetailProps
         full_name: saved.full_name,
         status: saved.status,
         email: saved.email || '',
-        phone_whatsapp: saved.phone_whatsapp || '',
-        telegram_chat_id: saved.telegram_chat_id || '',
-        instagram_scoped_id: saved.instagram_scoped_id || '',
-        notes: saved.notes || '',
-        segments: saved.segments || [],
-        tags: saved.tags || [],
-      });
+          phone_whatsapp: saved.phone_whatsapp || '',
+          telegram_chat_id: saved.telegram_chat_id || '',
+          instagram_scoped_id: saved.instagram_scoped_id || '',
+          notes: saved.notes || '',
+          segments: saved.segments || [],
+          tags: saved.tags || [],
+          groups: (saved.groups as any)?.map((g: any) => (typeof g === 'number' ? g : g.id)) || [],
+        });
       setIsEditing(false);
     } catch {
       setError('Failed to save contact');
     } finally {
       setSaving(false);
     }
+  };
+
+  const toggleGroup = (groupId: number) => {
+    setForm((prev) => {
+      const exists = prev.groups.includes(groupId);
+      return { ...prev, groups: exists ? prev.groups.filter((g) => g !== groupId) : [...prev.groups, groupId] };
+    });
   };
 
   const handleDelete = async () => {
@@ -354,6 +382,37 @@ export function ContactDetail({ contactId, onBack, onSaved }: ContactDetailProps
                 <br />
                 Last outbound: {contact?.last_outbound_at || '—'}
               </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Groups</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {availableGroups.length === 0 && <p className="text-gray-500 text-sm">No groups yet.</p>}
+              {availableGroups.map((group) => {
+                const checked = form.groups.includes(group.id);
+                const color = group.color || 'gray';
+                return (
+                  <label key={group.id} className="flex items-center gap-3 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={!isEditing && !isNew}
+                      onChange={() => toggleGroup(group.id)}
+                      className="h-4 w-4"
+                    />
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="inline-block h-3 w-3 rounded-full"
+                        style={{ backgroundColor: colorMap[color] || '#9CA3AF' }}
+                      />
+                      {group.name}
+                    </span>
+                  </label>
+                );
+              })}
             </CardContent>
           </Card>
 
