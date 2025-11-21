@@ -142,8 +142,8 @@ LOGGING = {
         "verbose": {"format": "[{asctime}] {levelname} {name}: {message}", "style": "{"},
     },
     "handlers": {
-        # Keep console quieter: warnings and above only
-        "console": {"class": "logging.StreamHandler", "formatter": "verbose", "level": "WARNING"},
+        # Console shows info+ again so logs are visible during dev
+        "console": {"class": "logging.StreamHandler", "formatter": "verbose", "level": "INFO"},
         # Daily rotation at midnight; files suffixed by date; keep 7 days
         "file": {
             "class": "logging.handlers.TimedRotatingFileHandler",
@@ -170,6 +170,11 @@ LOGGING = {
         "django": {
             "handlers": ["console", "file", "error_file"],
             "level": os.getenv("DJANGO_LOG_LEVEL", "INFO"),
+        },
+        "django.request": {
+            "handlers": ["console", "file", "error_file"],
+            "level": "ERROR",
+            "propagate": False,
         },
         "corbi.audit": {
             "handlers": ["console", "file", "error_file"],
