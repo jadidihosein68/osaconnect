@@ -91,22 +91,69 @@ class EmailSender:
 
 
 class TelegramSender:
-    def send(self, *, to: str, body: str, media_url: str | None = None, credentials: dict | None = None) -> SendResult:
+    def send(
+        self,
+        *,
+        to: str,
+        body: str = "",
+        media_path: str | None = None,
+        media_type: str | None = None,
+        credentials: dict | None = None,
+        caption: str | None = None,
+    ) -> SendResult:
+        """
+        Send a Telegram message. If media_path is provided, will send as document/photo.
+        media_type: "photo" or "document" determines method.
+        """
         credentials = credentials or {}
         token = credentials.get("token")
         extra = credentials.get("extra") or {}
         chat_id = extra.get("chat_id") or to
         if not token or not chat_id:
             return SendResult(success=False, error="Telegram integration missing token/chat_id")
-        try:
-            async def _send():
-                bot = Bot(token=token)
-                return await bot.send_message(chat_id=chat_id, text=body)
+        if media_path:
+            try:
+                # ensure file exists/readable before async call
+                open(media_path, "rb").close()
+            except Exception as exc:  # noqa: BLE001
+                return SendResult(success=False, error=f"Attachment not readable: {exc}")
+        async def _send_text():
+            bot = Bot(token=token)
+            return await bot.send_message(chat_id=chat_id, text=body)
 
-            message = asyncio.run(_send())
-            return SendResult(success=True, provider_message_id=str(getattr(message, "message_id", "")))
-        except Exception as exc:
-            return SendResult(success=False, error=str(exc))
+        async def _send_photo():
+            bot = Bot(token=token)
+            with open(media_path, "rb") as fh:
+                return await bot.send_photo(chat_id=chat_id, photo=fh, caption=caption or body or None)
+
+        async def _send_document():
+            bot = Bot(token=token)
+            with open(media_path, "rb") as fh:
+                return await bot.send_document(chat_id=chat_id, document=fh, caption=caption or body or None)
+
+        async def _runner():
+            if media_path:
+                if media_type == "photo":
+                    return await _send_photo()
+                return await _send_document()
+            return await _send_text()
+
+        # light retry/backoff for transient network timeouts
+        last_err: str | None = None
+        for attempt in range(3):
+            try:
+                message = asyncio.run(asyncio.wait_for(_runner(), timeout=10))
+                return SendResult(success=True, provider_message_id=str(getattr(message, "message_id", "")))
+            except Exception as exc:  # noqa: BLE001
+                last_err = str(exc)
+                if attempt < 2:
+                    # short sleep before retry
+                    try:
+                        asyncio.run(asyncio.sleep(0.5))
+                    except Exception:
+                        pass
+                    continue
+                return SendResult(success=False, error=last_err or "send failed")
 
 
 class InstagramSender:

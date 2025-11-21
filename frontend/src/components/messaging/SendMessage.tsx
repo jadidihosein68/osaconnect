@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -18,6 +18,7 @@ import {
   fetchTelegramMessages,
   sendTelegramMessage,
   TelegramMessage,
+  uploadTelegramAttachment,
 } from '../../lib/api';
 import { EditorState, Modifier, convertToRaw, ContentState, convertFromHTML } from 'draft-js';
 import draftToHtml from 'draftjs-to-html';
@@ -48,11 +49,14 @@ export function SendMessage() {
   const [lastExclusions, setLastExclusions] = useState<any[]>([]);
   const [lastJobBatch, setLastJobBatch] = useState<any | null>(null);
   const [attachments, setAttachments] = useState<{ id: number; name: string; size: number; type: string }[]>([]);
+  const [telegramAttachments, setTelegramAttachments] = useState<{ id: number; name: string; size: number; type: string }[]>([]);
   const [htmlMode, setHtmlMode] = useState(false);
   const [editorState, setEditorState] = useState(() => EditorState.createEmpty());
   const [telegramMessages, setTelegramMessages] = useState<TelegramMessage[]>([]);
   const [telegramLoading, setTelegramLoading] = useState(false);
   const [telegramError, setTelegramError] = useState<string | null>(null);
+  const convoRef = useRef<HTMLDivElement | null>(null);
+  const scrollAnchorRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -100,7 +104,7 @@ export function SendMessage() {
     };
     poll();
     if (channel === 'telegram' && selectedTelegramContactId) {
-      timer = setInterval(poll, 5000);
+      timer = setInterval(poll, 3000);
     }
     return () => {
       if (timer) clearInterval(timer);
@@ -130,15 +134,31 @@ export function SendMessage() {
     }
   }, [channel, selectedTelegramContactId]);
 
+  // Auto-scroll to latest message when the list updates
+  useEffect(() => {
+    if (channel !== 'telegram') return;
+    if (scrollAnchorRef.current) {
+      scrollAnchorRef.current.scrollIntoView({ behavior: 'smooth' });
+    } else if (convoRef.current) {
+      convoRef.current.scrollTop = convoRef.current.scrollHeight;
+    }
+  }, [telegramMessages, channel]);
+
   const handleSend = async () => {
     if (channel === 'telegram') {
       if (!selectedTelegramContactId) {
         setError('Select a contact for Telegram.');
         return;
       }
+      const selectedContact = contacts.find((c) => c.id === selectedTelegramContactId);
+      if (!selectedContact || selectedContact.telegram_status !== 'onboarded' || !selectedContact.telegram_chat_id) {
+        setError('This contact is no longer onboarded to Telegram.');
+        return;
+      }
       const textOnly = telegramText.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, '').trim();
       const text = textOnly || telegramText.trim();
-      if (!text) {
+      const attachmentId = telegramAttachments[0]?.id;
+      if (!text && !attachmentId) {
         setError('Message cannot be empty');
         return;
       }
@@ -146,13 +166,21 @@ export function SendMessage() {
       setError(null);
       setSuccess(null);
       try {
-        await sendTelegramMessage(selectedTelegramContactId, { text });
+        const payload: any = { text: text || undefined };
+        if (telegramAttachments.length > 1) {
+          payload.attachment_ids = telegramAttachments.map((a) => a.id);
+        } else if (attachmentId) {
+          payload.attachment_id = attachmentId;
+        }
+        await sendTelegramMessage(selectedTelegramContactId, payload);
         setSuccess('Telegram message sent.');
         setTelegramText('');
+        setTelegramAttachments([]);
         const msgs = await fetchTelegramMessages(selectedTelegramContactId);
         setTelegramMessages(msgs);
       } catch (e: any) {
-        setError(e?.response?.data?.detail || 'Failed to send Telegram message');
+        const serverDetail = e?.response?.data?.detail;
+        setError(serverDetail || 'Failed to send Telegram message');
       } finally {
         setLoading(false);
       }
@@ -223,6 +251,7 @@ export function SendMessage() {
                   setSelectedTelegramContactId(null);
                   setEmailBody('<p></p>');
                   setTelegramText('');
+                  setTelegramAttachments([]);
                 }}
               >
                 <SelectTrigger>
@@ -521,31 +550,82 @@ export function SendMessage() {
               <CardTitle>Conversation</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Active contact</div>
                   <div className="text-lg font-semibold text-gray-900">{selectedTelegramContact?.full_name || 'Select a contact'}</div>
                   {selectedTelegramContact?.email && <div className="text-xs text-gray-600">{selectedTelegramContact.email}</div>}
                 </div>
+                <div className="w-60">
+                  <Select
+                    disabled={filteredOnboarded.length === 0}
+                    value={selectedTelegramContactId ? String(selectedTelegramContactId) : ''}
+                    onValueChange={(val) => setSelectedTelegramContactId(Number(val))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose contact" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {filteredOnboarded.map((c) => (
+                        <SelectItem key={c.id} value={String(c.id)}>
+                          {c.full_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div className="h-[420px] overflow-y-auto border rounded p-3 bg-gray-50">
+              <div
+                ref={convoRef}
+                className="border rounded p-3 bg-gray-50 scroll-smooth custom-scrollbar"
+                style={{ maxHeight: 420, overflowY: 'auto', minHeight: 420 }}
+              >
                 {!selectedTelegramContact && <div className="text-sm text-gray-500">Select a contact on the left to view the conversation.</div>}
                 {selectedTelegramContact && telegramLoading && <div className="text-sm text-gray-500">Loading conversation...</div>}
                 {selectedTelegramContact && telegramError && <div className="text-sm text-red-600">{telegramError}</div>}
                 {selectedTelegramContact && !telegramLoading && telegramMessages.length === 0 && <div className="text-sm text-gray-500">No messages yet.</div>}
                 {selectedTelegramContact &&
-                  telegramMessages.map((m) => (
-                    <div key={m.id} className={`mb-3 flex ${m.direction === 'OUTBOUND' ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-md px-3 py-2 rounded-lg shadow-sm ${m.direction === 'OUTBOUND' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-900 border'}`}>
-                        <div className="text-xs opacity-80 mb-1">{m.direction === 'OUTBOUND' ? 'Bot' : selectedTelegramContact.full_name || 'User'}</div>
-                        <div className="text-sm whitespace-pre-wrap">{m.text || '—'}</div>
-                        <div className="text-[11px] mt-1 opacity-70">{m.created_at ? new Date(m.created_at).toLocaleString() : ''}</div>
+                  telegramMessages.map((m) => {
+                    const isOutbound = m.direction === 'OUTBOUND';
+                    const hasAttachment = m.attachments && m.attachments.length > 0;
+                    const att = hasAttachment ? m.attachments[0] : null;
+                    const isImage = att?.content_type?.startsWith?.('image/');
+                    const statusText = m.status && m.status !== 'sent' ? m.status : '';
+                    return (
+                      <div key={m.id} className={`mb-3 flex ${isOutbound ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-md px-3 py-2 rounded-lg shadow-sm ${isOutbound ? 'bg-indigo-600 text-white' : 'bg-white text-gray-900 border'}`}>
+                          <div className="flex items-center gap-2 text-xs opacity-80 mb-1">
+                            <span>{isOutbound ? 'Bot' : selectedTelegramContact.full_name || 'User'}</span>
+                            {statusText && <span className={`px-2 py-0.5 rounded-full ${isOutbound ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-700'}`}>{statusText}</span>}
+                          </div>
+                          <div className="text-sm whitespace-pre-wrap">{m.text || (hasAttachment ? '' : '—')}</div>
+                          {hasAttachment && (
+                            <div className="mt-2 space-y-1">
+                              {isImage && att?.url ? (
+                                <a href={att.url} target="_blank" rel="noreferrer" className="block">
+                                  <img src={att.url} alt={att.name || 'attachment'} className="max-w-full max-h-48 rounded border" />
+                                </a>
+                              ) : (
+                                <a
+                                  href={att?.url || '#'}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className={`block text-xs underline ${isOutbound ? 'text-white' : 'text-indigo-600'}`}
+                                >
+                                  {att?.name || 'Attachment'} {att?.size ? `(${Math.round(att.size / 1024)} KB)` : ''}
+                                </a>
+                              )}
+                            </div>
+                          )}
+                          <div className="text-[11px] mt-1 opacity-70">{m.created_at ? new Date(m.created_at).toLocaleString() : ''}</div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
+                <div ref={scrollAnchorRef} />
               </div>
-              <div className="space-y-2">
-                <Label>New message</Label>
+                <div className="space-y-2">
+                  <Label>New message</Label>
                 <Textarea
                   placeholder="Write a message..."
                   value={telegramText}
@@ -553,6 +633,46 @@ export function SendMessage() {
                   rows={4}
                   disabled={!selectedTelegramContactId}
                 />
+                <div className="space-y-2">
+                  <Label>Attachments (optional)</Label>
+                  <input
+                    type="file"
+                    multiple
+                    onChange={async (e) => {
+                      const files = Array.from(e.target.files || []);
+                      for (const file of files) {
+                        if (file.size > 20 * 1024 * 1024) {
+                          setError('File too large for Telegram (max 20MB).');
+                          continue;
+                        }
+                        try {
+                          const uploaded = await uploadTelegramAttachment(file);
+                          setTelegramAttachments((prev) => [...prev, { id: uploaded.id, name: uploaded.filename, size: uploaded.size, type: uploaded.content_type }]);
+                          setError(null);
+                        } catch (err: any) {
+                          setError(err?.response?.data?.file?.[0] || 'Attachment upload failed');
+                        }
+                      }
+                      if (e.target) e.target.value = '';
+                    }}
+                    className="border rounded p-2"
+                    disabled={!selectedTelegramContactId}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    {telegramAttachments.map((a) => (
+                      <span key={a.id} className="px-2 py-1 text-xs rounded-full border bg-gray-50">
+                        {a.name} ({Math.round(a.size / 1024)} KB)
+                        <button
+                          className="ml-2 text-red-500"
+                          onClick={() => setTelegramAttachments((prev) => prev.filter((att) => att.id !== a.id))}
+                          type="button"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
                 <Button onClick={handleSend} disabled={loading || !selectedTelegramContactId}>
                   <Send className="w-4 h-4 mr-2" />
                   {loading ? 'Sending...' : 'Send'}

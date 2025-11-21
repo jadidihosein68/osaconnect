@@ -17,6 +17,7 @@ from .tasks import process_email_job
 from .models import Suppression
 from django.utils import timezone
 import secrets
+import logging
 from messaging.channels import EmailSender, TelegramSender
 from contacts.models import Contact
 from django.conf import settings
@@ -24,6 +25,7 @@ from contacts.serializers import ContactSerializer
 from integrations.models import Integration
 from integrations.utils import decrypt_token
 audit_logger = logging.getLogger("corbi.audit")
+logger = logging.getLogger(__name__)
 
 
 class OutboundMessageViewSet(viewsets.ModelViewSet):
@@ -344,16 +346,48 @@ class TelegramMessageViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, vie
         org = get_current_org(request)
         contact_id = request.data.get("contact_id")
         text = (request.data.get("text") or "").strip()
+        attachment_id = request.data.get("attachment_id")
+        attachment_ids = request.data.get("attachment_ids") or []
+        if attachment_id and not attachment_ids:
+            attachment_ids = [attachment_id]
         if not contact_id:
             return Response({"detail": "contact_id required"}, status=400)
-        if not text:
-            return Response({"detail": "Message text required"}, status=400)
+        if not text and not attachment_ids:
+            return Response({"detail": "Message text or attachment required"}, status=400)
         try:
             contact = Contact.objects.get(pk=contact_id, organization=org)
         except Contact.DoesNotExist:
             return Response({"detail": "Contact not found"}, status=404)
         if contact.telegram_status != Contact.TELEGRAM_STATUS_ONBOARDED or not contact.telegram_chat_id:
             return Response({"detail": "Contact is not onboarded to Telegram"}, status=400)
+
+        attachments_payload = []
+        attachments_objs: list[EmailAttachment] = []
+        if attachment_ids:
+            if isinstance(attachment_ids, str):
+                try:
+                    attachment_ids = [int(attachment_ids)]
+                except Exception:
+                    attachment_ids = []
+            for att_id in attachment_ids:
+                try:
+                    attachment = EmailAttachment.objects.get(id=att_id, organization=org)
+                except EmailAttachment.DoesNotExist:
+                    return Response({"detail": f"Attachment {att_id} not found"}, status=404)
+                if attachment.size > 20 * 1024 * 1024:
+                    return Response({"detail": f"Attachment {attachment.filename} too large for Telegram (max ~20MB)"}, status=400)
+                if not attachment.file:
+                    return Response({"detail": f"Attachment file missing for {attachment.filename}"}, status=400)
+                attachments_objs.append(attachment)
+                attachments_payload.append(
+                    {
+                        "id": attachment.id,
+                        "name": attachment.filename,
+                        "content_type": attachment.content_type,
+                        "size": attachment.size,
+                        "url": attachment.file.url if hasattr(attachment.file, "url") else "",
+                    }
+                )
 
         # send via Telegram
         try:
@@ -362,14 +396,71 @@ class TelegramMessageViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, vie
             if not token_plain:
                 return Response({"detail": "Telegram integration token missing"}, status=400)
             sender = TelegramSender()
-            result = sender.send(to=contact.telegram_chat_id, body=text, credentials={"token": token_plain})
-            tg_message_id = result.provider_message_id or ""
-            status_label = "sent" if result.success else "failed"
-            if not result.success:
-                return Response({"detail": f"Telegram send failed: {result.error or 'unknown error'}"}, status=502)
+            created_messages = []
+
+            def _send_and_record(media_path=None, media_kind=None, text_value=text, attach_payload=None):
+                result = sender.send(
+                    to=contact.telegram_chat_id,
+                    body=text_value,
+                    media_path=media_path,
+                    media_type=media_kind,
+                    credentials={"token": token_plain},
+                    caption=text_value if media_path else None,
+                )
+                status_label = "sent" if result.success else "failed"
+                tg_message_id = result.provider_message_id or ""
+                msg = TelegramMessage.objects.create(
+                    organization=org,
+                    contact=contact,
+                    chat_id=contact.telegram_chat_id,
+                    direction=TelegramMessage.DIR_OUTBOUND,
+                    message_type=TelegramMessage.TYPE_TEXT if not media_kind else (TelegramMessage.TYPE_PHOTO if media_kind == "photo" else TelegramMessage.TYPE_DOCUMENT),
+                    text=text_value if not media_path else (text_value or ""),
+                    attachments=attach_payload or [],
+                    telegram_message_id=tg_message_id,
+                    status=status_label,
+                )
+                created_messages.append(msg)
+                if not result.success:
+                    logger.error(
+                        "Telegram send failed: %s (org=%s contact=%s chat_id=%s attachment=%s)",
+                        result.error or "unknown error",
+                        org.id,
+                        contact.id,
+                        contact.telegram_chat_id,
+                        media_path,
+                    )
+                return result
+
+            if attachments_objs:
+                # send each attachment as its own message; first attachment can carry caption text
+                for idx, att in enumerate(attachments_objs):
+                    mime = (att.content_type or "").lower()
+                    media_kind = "photo" if mime.startswith("image/") else "document"
+                    caption_text = text if idx == 0 else ""
+                    _send_and_record(media_path=att.file.path, media_kind=media_kind, text_value=caption_text, attach_payload=[attachments_payload[idx]])
+                if text and not attachments_objs:
+                    _send_and_record()
+            else:
+                _send_and_record()
+
+            if any(m.status == "failed" for m in created_messages):
+                return Response(
+                    {
+                        "detail": "One or more Telegram messages failed to send.",
+                        "messages": TelegramMessageSerializer(created_messages, many=True).data,
+                    },
+                    status=502,
+                )
+            return Response(TelegramMessageSerializer(created_messages, many=True).data, status=201)
         except Integration.DoesNotExist:
             return Response({"detail": "Telegram integration not configured"}, status=400)
         except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "Telegram send exception",
+                exc_info=True,
+                extra={"org": org.id, "contact": contact.id, "chat_id": contact.telegram_chat_id, "attachment": attachment_id},
+            )
             return Response({"detail": f"Telegram send error: {exc}"}, status=500)
 
         msg = TelegramMessage.objects.create(
@@ -377,9 +468,9 @@ class TelegramMessageViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, vie
             contact=contact,
             chat_id=contact.telegram_chat_id,
             direction=TelegramMessage.DIR_OUTBOUND,
-            message_type=TelegramMessage.TYPE_TEXT,
+            message_type=message_type,
             text=text,
-            attachments=[],
+            attachments=attachments_payload,
             telegram_message_id=tg_message_id,
             status=status_label,
         )

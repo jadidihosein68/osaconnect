@@ -318,4 +318,4 @@ class TelegramMessageSerializer(serializers.ModelSerializer):
             "status",
             "created_at",
         ]
-        read_only_fields = ["id", "chat_id", "direction", "message_type", "attachments", "telegram_message_id", "status", "created_at"]
+        read_only_fields = ["id", "chat_id", "direction", "message_type", "telegram_message_id", "status", "created_at"]

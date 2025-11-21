@@ -315,7 +315,10 @@ export async function fetchTelegramMessages(contactId: number): Promise<Telegram
   return data;
 }
 
-export async function sendTelegramMessage(contactId: number, payload: { text: string }): Promise<TelegramMessage> {
+export async function sendTelegramMessage(
+  contactId: number,
+  payload: { text?: string; attachment_id?: number; attachment_ids?: number[] },
+): Promise<TelegramMessage | TelegramMessage[]> {
   const { data } = await api.post(`/telegram/messages/`, { contact_id: contactId, ...payload });
   return data;
 }
@@ -410,6 +413,15 @@ export async function uploadEmailAttachment(file: File): Promise<{ id: number; f
   const form = new FormData();
   form.append("file", file);
   const { data } = await api.post("/email-attachments/", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export async function uploadTelegramAttachment(file: File): Promise<{ id: number; filename: string; size: number; content_type: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await api.post("/telegram/attachments/", form, {
     headers: { "Content-Type": "multipart/form-data" },
   });
   return data;
