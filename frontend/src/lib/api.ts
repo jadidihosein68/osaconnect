@@ -16,6 +16,11 @@ export interface Contact {
   email?: string;
   phone_whatsapp?: string;
   telegram_chat_id?: string;
+  telegram_status?: string;
+  telegram_invited?: boolean;
+  telegram_linked?: boolean;
+  telegram_onboarded_at?: string | null;
+  telegram_last_invite_at?: string | null;
   instagram_scoped_id?: string;
   status: string;
   notes?: string;
@@ -274,6 +279,22 @@ export async function updateContact(id: number | string, payload: ContactPayload
 
 export async function deleteContact(id: number | string) {
   await api.delete(`/contacts/${id}/`);
+}
+
+// Telegram onboarding
+export async function fetchTelegramOnboardingContacts(): Promise<Contact[]> {
+  const { data } = await api.get("/telegram/onboarding/");
+  return data;
+}
+
+export async function generateTelegramInviteLink(contactId: number): Promise<{ link: string }> {
+  const { data } = await api.post(`/telegram/onboarding/${contactId}/invite_link/`);
+  return data;
+}
+
+export async function sendTelegramInviteEmail(contactId: number): Promise<{ status: string; link: string }> {
+  const { data } = await api.post(`/telegram/onboarding/${contactId}/invite_email/`);
+  return data;
 }
 
 export async function fetchTemplates(): Promise<Template[]> {

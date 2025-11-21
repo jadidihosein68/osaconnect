@@ -8,7 +8,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from assistant.views import AssistantView
 from bookings.views import BookingViewSet
 from contacts.views import ContactViewSet, ContactGroupViewSet
-from messaging.views import InboundMessageViewSet, OutboundMessageViewSet, EmailJobViewSet, EmailAttachmentViewSet, unsubscribe
+from messaging.views import InboundMessageViewSet, OutboundMessageViewSet, EmailJobViewSet, EmailAttachmentViewSet, unsubscribe, TelegramOnboardingViewSet, TelegramOnboardWebhook
 from monitoring.views import HealthcheckView, MetricsView, MonitoringSummaryView, SettingsView, MonitoringDetailView, MonitoringEventsView, MonitoringAlertsView
 from organizations.views import MembershipViewSet
 from templates_app.views import MessageTemplateViewSet
@@ -29,6 +29,7 @@ router.register(r"email-attachments", EmailAttachmentViewSet, basename="email-at
 router.register(r"bookings", BookingViewSet, basename="booking")
 router.register(r"memberships", MembershipViewSet, basename="membership")
 router.register(r"billing/logs", BillingLogViewSet, basename="billing-log")
+router.register(r"telegram/onboarding", TelegramOnboardingViewSet, basename="telegram-onboarding")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -36,6 +37,7 @@ urlpatterns = [
     path("api/webhooks/<str:channel>/", InboundWebhookView.as_view(), name="inbound_webhook"),
     path("api/callbacks/<str:channel>/", ProviderCallbackView.as_view(), name="provider_callback"),
     path("api/callbacks/sendgrid/", SendGridEventView.as_view(), name="sendgrid_events"),
+    path("api/webhooks/telegram/onboard/", TelegramOnboardWebhook.as_view(), name="telegram_onboard_webhook"),
     path("api/assistant/", AssistantView.as_view(), name="assistant"),
     path("unsubscribe/", unsubscribe, name="unsubscribe"),
     path("health/", HealthcheckView.as_view(), name="healthcheck"),

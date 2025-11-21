@@ -39,6 +39,17 @@ function getInitials(name?: string) {
 export function Layout({ children, currentScreen, onNavigate, onLogout, organizations = [], currentOrgId, onOrgChange, userName, userEmail }: LayoutProps) {
   const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({ contacts: true });
 
+  const isSubActive = (path: string, subId: string) => {
+    if (subId === '/contacts/all-contacts') {
+      return (
+        path.startsWith('/contacts') &&
+        !path.startsWith('/contacts/groups') &&
+        !path.startsWith('/contacts/telegram-onboarding')
+      );
+    }
+    return path === subId || path.startsWith(`${subId}`);
+  };
+
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     {
@@ -46,8 +57,9 @@ export function Layout({ children, currentScreen, onNavigate, onLogout, organiza
       label: 'Contacts',
       icon: Users,
       submenu: [
-        { id: '/contacts', label: 'All Contacts' },
+        { id: '/contacts/all-contacts', label: 'All Contacts' },
         { id: '/contacts/groups', label: 'Groups' },
+        { id: '/contacts/telegram-onboarding', label: 'Telegram Onboarding' },
       ],
     },
     { 
@@ -125,7 +137,7 @@ export function Layout({ children, currentScreen, onNavigate, onLogout, organiza
                         <button
                           onClick={() => onNavigate(subitem.id.startsWith('/') ? subitem.id : `/${subitem.id}`)}
                           className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
-                            currentScreen === subitem.id || currentScreen.startsWith(subitem.id)
+                            isSubActive(currentScreen, subitem.id)
                               ? 'bg-indigo-50 text-indigo-600'
                               : 'text-gray-600 hover:bg-gray-100'
                           }`}

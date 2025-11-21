@@ -41,6 +41,7 @@ export function Settings() {
       fields: [
         { key: 'token', label: 'Bot Token', type: 'password' },
         { key: 'chat_id', label: 'Chat ID' },
+        { key: 'bot_username', label: 'Bot Username (@yourbot)' },
       ],
     },
     instagram: {

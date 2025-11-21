@@ -215,3 +215,26 @@ class ContactEngagement(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class TelegramInviteToken(models.Model):
+    STATUS_PENDING = "PENDING"
+    STATUS_USED = "USED"
+    STATUS_EXPIRED = "EXPIRED"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_USED, "Used"),
+        (STATUS_EXPIRED, "Expired"),
+    ]
+
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="telegram_tokens")
+    contact = models.ForeignKey(Contact, on_delete=models.CASCADE, related_name="telegram_tokens")
+    verification_token = models.CharField(max_length=255, unique=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(blank=True, null=True)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["organization", "contact", "status"], name="telegram_token_idx")]

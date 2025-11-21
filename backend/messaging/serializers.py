@@ -6,7 +6,7 @@ from contacts.models import Contact
 from contacts.serializers import ContactSerializer
 from templates_app.models import MessageTemplate
 from templates_app.serializers import MessageTemplateSerializer
-from .models import InboundMessage, OutboundMessage, EmailJob, EmailRecipient, EmailAttachment
+from .models import InboundMessage, OutboundMessage, EmailJob, EmailRecipient, EmailAttachment, TelegramInviteToken
 from urllib.parse import urlparse
 import logging
 from organizations.utils import get_current_org
@@ -281,3 +281,23 @@ class EmailJobCreateSerializer(serializers.Serializer):
                     }
                 )
         return attachments
+
+
+class TelegramInviteTokenSerializer(serializers.ModelSerializer):
+    contact_name = serializers.CharField(source="contact.full_name", read_only=True)
+    contact_email = serializers.EmailField(source="contact.email", read_only=True)
+
+    class Meta:
+        model = TelegramInviteToken
+        fields = [
+            "id",
+            "contact",
+            "contact_name",
+            "contact_email",
+            "verification_token",
+            "status",
+            "expires_at",
+            "used_at",
+            "created_at",
+        ]
+        read_only_fields = fields

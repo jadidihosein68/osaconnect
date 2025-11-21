@@ -3,19 +3,26 @@ from __future__ import annotations
 from rest_framework import filters, viewsets, status, mixins, parsers
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
 from django.http import HttpResponse
 import logging
 from organizations.utils import get_current_org
 from organizations.permissions import IsOrgMemberWithRole
 
-from .models import InboundMessage, OutboundMessage, EmailJob, EmailAttachment, EmailRecipient
-from .serializers import InboundMessageSerializer, OutboundMessageSerializer, EmailJobSerializer, EmailJobCreateSerializer
+from .models import InboundMessage, OutboundMessage, EmailJob, EmailAttachment, EmailRecipient, TelegramInviteToken
+from .serializers import InboundMessageSerializer, OutboundMessageSerializer, EmailJobSerializer, EmailJobCreateSerializer, EmailRecipientSerializer, TelegramInviteTokenSerializer
 from .serializers_extra import EmailAttachmentSerializer
 from .tasks import process_email_job
 from .models import Suppression
-from .serializers import EmailRecipientSerializer
-from organizations.utils import get_current_org
+from django.utils import timezone
+import secrets
+from messaging.channels import EmailSender
+from contacts.models import Contact
+from django.conf import settings
+from contacts.serializers import ContactSerializer
+from integrations.models import Integration
+from integrations.utils import decrypt_token
 audit_logger = logging.getLogger("corbi.audit")
 
 
@@ -173,3 +180,136 @@ def unsubscribe(request):
     </body></html>
     """
     return HttpResponse(html)
+
+
+class TelegramOnboardingViewSet(viewsets.ViewSet):
+    permission_classes = [IsOrgMemberWithRole]
+
+    def list(self, request):
+        org = get_current_org(request)
+        contacts = Contact.objects.filter(organization=org).order_by("full_name")
+        serializer = ContactSerializer(contacts, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["post"])
+    def invite_link(self, request, pk=None):
+        org = get_current_org(request)
+        contact = Contact.objects.filter(pk=pk, organization=org).first()
+        if not contact:
+            return Response({"detail": "Contact not found"}, status=404)
+        token = self._get_or_create_token(org.id, contact.id)
+        bot_name = self._bot_username(org)
+        deep_link = f"https://t.me/{bot_name}?start={token.verification_token}"
+        return Response({"link": deep_link})
+
+    @action(detail=True, methods=["post"])
+    def invite_email(self, request, pk=None):
+        org = get_current_org(request)
+        contact = Contact.objects.filter(pk=pk, organization=org).first()
+        if not contact:
+            return Response({"detail": "Contact not found"}, status=404)
+        if not contact.email:
+            return Response({"detail": "Contact missing email"}, status=400)
+        token = self._get_or_create_token(org.id, contact.id)
+        bot_name = self._bot_username(org)
+        deep_link = f"https://t.me/{bot_name}?start={token.verification_token}"
+        sender = EmailSender()
+        subject = f"Connect with {org.name} on Telegram"
+        body = (
+            f"<p>Hi {contact.full_name or 'there'},</p>"
+            f"<p>You can now receive updates from {org.name} via Telegram.</p>"
+            f"<p><a href='{deep_link}' style='padding:10px 14px;background:#0ea5e9;color:white;text-decoration:none;border-radius:6px;'>Connect on Telegram</a></p>"
+        )
+        try:
+            integration = Integration.objects.get(organization=org, provider="sendgrid", is_active=True)
+            token_plain = decrypt_token(getattr(integration, "token", "") or getattr(integration, "token_encrypted", "") or "")
+            from_email = (integration.extra or {}).get("from_email") or getattr(settings, "SENDGRID_FROM_EMAIL", "no-reply@example.com")
+            if not token_plain or not from_email:
+                raise ValueError("SendGrid integration missing token or from_email")
+            credentials = {"token": token_plain, "extra": {"from_email": from_email, "subject": subject}}
+        except Integration.DoesNotExist:
+            return Response({"detail": "SendGrid integration not configured for this organization"}, status=400)
+        except Exception as exc:
+            return Response({"detail": f"SendGrid integration invalid: {exc}"}, status=400)
+
+        result = sender.send(to=contact.email, body=body, credentials=credentials)
+        if not result.success:
+            return Response({"detail": f"SendGrid send failed: {result.error or 'unknown error'}"}, status=502)
+
+        contact.telegram_status = Contact.TELEGRAM_STATUS_INVITED
+        contact.telegram_invited = True
+        contact.telegram_last_invite_at = timezone.now()
+        contact.save(update_fields=["telegram_status", "telegram_invited", "telegram_last_invite_at", "updated_at"])
+        return Response({"status": "invite_sent", "link": deep_link})
+
+    def _bot_username(self, org):
+        try:
+            integ = Integration.objects.get(organization=org, provider="telegram", is_active=True)
+            bot_username = (integ.extra or {}).get("bot_username") or ""
+            if bot_username.startswith("@"):
+                bot_username = bot_username[1:]
+            if bot_username:
+                return bot_username
+        except Integration.DoesNotExist:
+            pass
+        # fallback to org.domain prefix
+        return (org.domain or "corbi_bot").split(".")[0]
+
+    def _get_or_create_token(self, org_id: int, contact_id: int) -> TelegramInviteToken:
+        now = timezone.now()
+        existing = TelegramInviteToken.objects.filter(
+            organization_id=org_id,
+            contact_id=contact_id,
+            status=TelegramInviteToken.STATUS_PENDING,
+            expires_at__gt=now,
+        ).first()
+        if existing:
+            return existing
+        token_val = secrets.token_urlsafe(24)
+        return TelegramInviteToken.objects.create(
+            organization_id=org_id,
+            contact_id=contact_id,
+            verification_token=token_val,
+            expires_at=now + timezone.timedelta(days=7),
+            status=TelegramInviteToken.STATUS_PENDING,
+        )
+
+
+class TelegramOnboardWebhook(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        payload = request.data or {}
+        message = payload.get("message") or {}
+        text = message.get("text") or ""
+        chat = message.get("chat") or {}
+        chat_id = chat.get("id")
+        if not text or not chat_id:
+            return Response({"status": "ignored"}, status=400)
+        if not text.startswith("/start"):
+            return Response({"status": "ignored"}, status=202)
+        parts = text.split(" ", 1)
+        if len(parts) < 2:
+            return Response({"status": "ignored"}, status=202)
+        token_val = parts[1].strip()
+        now = timezone.now()
+        try:
+            token = TelegramInviteToken.objects.select_related("contact", "organization").get(
+                verification_token=token_val, status=TelegramInviteToken.STATUS_PENDING, expires_at__gt=now
+            )
+        except TelegramInviteToken.DoesNotExist:
+            return Response({"status": "invalid_token"}, status=400)
+
+        contact = token.contact
+        contact.telegram_chat_id = str(chat_id)
+        contact.telegram_status = Contact.TELEGRAM_STATUS_ONBOARDED
+        contact.telegram_linked = True
+        contact.telegram_onboarded_at = now
+        contact.save(update_fields=["telegram_chat_id", "telegram_status", "telegram_linked", "telegram_onboarded_at", "updated_at"])
+
+        token.status = TelegramInviteToken.STATUS_USED
+        token.used_at = now
+        token.save(update_fields=["status", "used_at", "updated_at"])
+
+        return Response({"status": "ok"})

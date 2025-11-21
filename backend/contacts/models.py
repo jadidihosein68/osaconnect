@@ -52,6 +52,21 @@ class Contact(models.Model):
     phone_whatsapp = models.CharField(max_length=32, blank=True, null=True, unique=True)
     email = models.EmailField(blank=True, null=True, unique=True)
     telegram_chat_id = models.CharField(max_length=64, blank=True, null=True, unique=True)
+    TELEGRAM_STATUS_NOT_LINKED = "not_linked"
+    TELEGRAM_STATUS_INVITED = "invited"
+    TELEGRAM_STATUS_ONBOARDED = "onboarded"
+    TELEGRAM_STATUS_BLOCKED = "blocked"
+    TELEGRAM_STATUS_CHOICES = [
+        (TELEGRAM_STATUS_NOT_LINKED, "Not Linked"),
+        (TELEGRAM_STATUS_INVITED, "Invited"),
+        (TELEGRAM_STATUS_ONBOARDED, "Onboarded"),
+        (TELEGRAM_STATUS_BLOCKED, "Blocked"),
+    ]
+    telegram_status = models.CharField(max_length=32, choices=TELEGRAM_STATUS_CHOICES, default=TELEGRAM_STATUS_NOT_LINKED)
+    telegram_linked = models.BooleanField(default=False)
+    telegram_invited = models.BooleanField(default=False)
+    telegram_onboarded_at = models.DateTimeField(blank=True, null=True)
+    telegram_last_invite_at = models.DateTimeField(blank=True, null=True)
     instagram_scoped_id = models.CharField(max_length=64, blank=True, null=True, unique=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
     segments = models.JSONField(default=list, blank=True)
