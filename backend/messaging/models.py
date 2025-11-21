@@ -217,6 +217,39 @@ class ContactEngagement(models.Model):
         ordering = ["-created_at"]
 
 
+class TelegramMessage(models.Model):
+    DIR_INBOUND = "INBOUND"
+    DIR_OUTBOUND = "OUTBOUND"
+    DIR_CHOICES = [(DIR_INBOUND, "Inbound"), (DIR_OUTBOUND, "Outbound")]
+
+    TYPE_TEXT = "TEXT"
+    TYPE_PHOTO = "PHOTO"
+    TYPE_DOCUMENT = "DOCUMENT"
+    TYPE_VIDEO = "VIDEO"
+    TYPE_OTHER = "OTHER"
+    TYPE_CHOICES = [
+        (TYPE_TEXT, "Text"),
+        (TYPE_PHOTO, "Photo"),
+        (TYPE_DOCUMENT, "Document"),
+        (TYPE_VIDEO, "Video"),
+        (TYPE_OTHER, "Other"),
+    ]
+
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="telegram_messages")
+    contact = models.ForeignKey(Contact, on_delete=models.CASCADE, related_name="telegram_messages")
+    chat_id = models.CharField(max_length=64)
+    direction = models.CharField(max_length=16, choices=DIR_CHOICES)
+    message_type = models.CharField(max_length=16, choices=TYPE_CHOICES, default=TYPE_TEXT)
+    text = models.TextField(blank=True, default="")
+    attachments = models.JSONField(default=list, blank=True)
+    telegram_message_id = models.CharField(max_length=128, blank=True, default="")
+    status = models.CharField(max_length=32, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["organization", "contact", "chat_id", "created_at"], name="tgmsg_org_contact_idx")]
+
+
 class TelegramInviteToken(models.Model):
     STATUS_PENDING = "PENDING"
     STATUS_USED = "USED"

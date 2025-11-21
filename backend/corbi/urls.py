@@ -8,7 +8,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from assistant.views import AssistantView
 from bookings.views import BookingViewSet
 from contacts.views import ContactViewSet, ContactGroupViewSet
-from messaging.views import InboundMessageViewSet, OutboundMessageViewSet, EmailJobViewSet, EmailAttachmentViewSet, unsubscribe, TelegramOnboardingViewSet, TelegramOnboardWebhook
+from messaging.views import InboundMessageViewSet, OutboundMessageViewSet, EmailJobViewSet, EmailAttachmentViewSet, unsubscribe, TelegramOnboardingViewSet, TelegramOnboardWebhook, TelegramMessageViewSet
 from monitoring.views import HealthcheckView, MetricsView, MonitoringSummaryView, SettingsView, MonitoringDetailView, MonitoringEventsView, MonitoringAlertsView
 from organizations.views import MembershipViewSet
 from templates_app.views import MessageTemplateViewSet
@@ -30,6 +30,7 @@ router.register(r"bookings", BookingViewSet, basename="booking")
 router.register(r"memberships", MembershipViewSet, basename="membership")
 router.register(r"billing/logs", BillingLogViewSet, basename="billing-log")
 router.register(r"telegram/onboarding", TelegramOnboardingViewSet, basename="telegram-onboarding")
+router.register(r"telegram/messages", TelegramMessageViewSet, basename="telegram-messages")
 
 urlpatterns = [
     path("admin/", admin.site.urls),

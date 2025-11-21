@@ -6,7 +6,7 @@ from contacts.models import Contact
 from contacts.serializers import ContactSerializer
 from templates_app.models import MessageTemplate
 from templates_app.serializers import MessageTemplateSerializer
-from .models import InboundMessage, OutboundMessage, EmailJob, EmailRecipient, EmailAttachment, TelegramInviteToken
+from .models import InboundMessage, OutboundMessage, EmailJob, EmailRecipient, EmailAttachment, TelegramInviteToken, TelegramMessage
 from urllib.parse import urlparse
 import logging
 from organizations.utils import get_current_org
@@ -301,3 +301,21 @@ class TelegramInviteTokenSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+
+class TelegramMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TelegramMessage
+        fields = [
+            "id",
+            "contact",
+            "chat_id",
+            "direction",
+            "message_type",
+            "text",
+            "attachments",
+            "telegram_message_id",
+            "status",
+            "created_at",
+        ]
+        read_only_fields = ["id", "chat_id", "direction", "message_type", "attachments", "telegram_message_id", "status", "created_at"]

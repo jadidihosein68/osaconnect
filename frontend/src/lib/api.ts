@@ -31,6 +31,19 @@ export interface Contact {
   groups?: number[] | ContactGroup[];
 }
 
+export interface TelegramMessage {
+  id: number;
+  contact: number;
+  chat_id: string;
+  direction: string;
+  message_type: string;
+  text: string;
+  attachments: any[];
+  telegram_message_id?: string;
+  status?: string;
+  created_at: string;
+}
+
 export interface ContactGroup {
   id: number;
   name: string;
@@ -294,6 +307,16 @@ export async function generateTelegramInviteLink(contactId: number): Promise<{ l
 
 export async function sendTelegramInviteEmail(contactId: number): Promise<{ status: string; link: string }> {
   const { data } = await api.post(`/telegram/onboarding/${contactId}/invite_email/`);
+  return data;
+}
+
+export async function fetchTelegramMessages(contactId: number): Promise<TelegramMessage[]> {
+  const { data } = await api.get(`/telegram/messages/?contact_id=${contactId}`);
+  return data;
+}
+
+export async function sendTelegramMessage(contactId: number, payload: { text: string }): Promise<TelegramMessage> {
+  const { data } = await api.post(`/telegram/messages/`, { contact_id: contactId, ...payload });
   return data;
 }
 

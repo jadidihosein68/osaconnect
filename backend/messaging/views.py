@@ -10,14 +10,14 @@ import logging
 from organizations.utils import get_current_org
 from organizations.permissions import IsOrgMemberWithRole
 
-from .models import InboundMessage, OutboundMessage, EmailJob, EmailAttachment, EmailRecipient, TelegramInviteToken
-from .serializers import InboundMessageSerializer, OutboundMessageSerializer, EmailJobSerializer, EmailJobCreateSerializer, EmailRecipientSerializer, TelegramInviteTokenSerializer
+from .models import InboundMessage, OutboundMessage, EmailJob, EmailAttachment, EmailRecipient, TelegramInviteToken, TelegramMessage
+from .serializers import InboundMessageSerializer, OutboundMessageSerializer, EmailJobSerializer, EmailJobCreateSerializer, EmailRecipientSerializer, TelegramInviteTokenSerializer, TelegramMessageSerializer
 from .serializers_extra import EmailAttachmentSerializer
 from .tasks import process_email_job
 from .models import Suppression
 from django.utils import timezone
 import secrets
-from messaging.channels import EmailSender
+from messaging.channels import EmailSender, TelegramSender
 from contacts.models import Contact
 from django.conf import settings
 from contacts.serializers import ContactSerializer
@@ -288,7 +288,20 @@ class TelegramOnboardWebhook(APIView):
         if not text or not chat_id:
             return Response({"status": "ignored"}, status=400)
         if not text.startswith("/start"):
-            return Response({"status": "ignored"}, status=202)
+            # Treat as inbound message
+            contact = Contact.objects.filter(telegram_chat_id=str(chat_id)).select_related("organization").first()
+            if contact:
+                TelegramMessage.objects.create(
+                    organization=contact.organization,
+                    contact=contact,
+                    chat_id=str(chat_id),
+                    direction=TelegramMessage.DIR_INBOUND,
+                    message_type=TelegramMessage.TYPE_TEXT,
+                    text=text,
+                    attachments=[],
+                    status="received",
+                )
+            return Response({"status": "received"}, status=202)
         parts = text.split(" ", 1)
         if len(parts) < 2:
             return Response({"status": "ignored"}, status=202)
@@ -313,3 +326,61 @@ class TelegramOnboardWebhook(APIView):
         token.save(update_fields=["status", "used_at", "updated_at"])
 
         return Response({"status": "ok"})
+
+
+class TelegramMessageViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
+    permission_classes = [IsOrgMemberWithRole]
+    serializer_class = TelegramMessageSerializer
+
+    def get_queryset(self):
+        org = get_current_org(self.request)
+        qs = TelegramMessage.objects.filter(organization=org).select_related("contact")
+        contact_id = self.request.query_params.get("contact_id")
+        if contact_id:
+            qs = qs.filter(contact_id=contact_id)
+        return qs.order_by("created_at")
+
+    def create(self, request, *args, **kwargs):
+        org = get_current_org(request)
+        contact_id = request.data.get("contact_id")
+        text = (request.data.get("text") or "").strip()
+        if not contact_id:
+            return Response({"detail": "contact_id required"}, status=400)
+        if not text:
+            return Response({"detail": "Message text required"}, status=400)
+        try:
+            contact = Contact.objects.get(pk=contact_id, organization=org)
+        except Contact.DoesNotExist:
+            return Response({"detail": "Contact not found"}, status=404)
+        if contact.telegram_status != Contact.TELEGRAM_STATUS_ONBOARDED or not contact.telegram_chat_id:
+            return Response({"detail": "Contact is not onboarded to Telegram"}, status=400)
+
+        # send via Telegram
+        try:
+            integ = Integration.objects.get(organization=org, provider="telegram", is_active=True)
+            token_plain = decrypt_token(getattr(integ, "token", "") or getattr(integ, "token_encrypted", "") or "")
+            if not token_plain:
+                return Response({"detail": "Telegram integration token missing"}, status=400)
+            sender = TelegramSender()
+            result = sender.send(to=contact.telegram_chat_id, body=text, credentials={"token": token_plain})
+            tg_message_id = result.provider_message_id or ""
+            status_label = "sent" if result.success else "failed"
+            if not result.success:
+                return Response({"detail": f"Telegram send failed: {result.error or 'unknown error'}"}, status=502)
+        except Integration.DoesNotExist:
+            return Response({"detail": "Telegram integration not configured"}, status=400)
+        except Exception as exc:  # noqa: BLE001
+            return Response({"detail": f"Telegram send error: {exc}"}, status=500)
+
+        msg = TelegramMessage.objects.create(
+            organization=org,
+            contact=contact,
+            chat_id=contact.telegram_chat_id,
+            direction=TelegramMessage.DIR_OUTBOUND,
+            message_type=TelegramMessage.TYPE_TEXT,
+            text=text,
+            attachments=[],
+            telegram_message_id=tg_message_id,
+            status=status_label,
+        )
+        return Response(TelegramMessageSerializer(msg).data, status=201)

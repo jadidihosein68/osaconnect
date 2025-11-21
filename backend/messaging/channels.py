@@ -104,7 +104,7 @@ class TelegramSender:
                 return await bot.send_message(chat_id=chat_id, text=body)
 
             message = asyncio.run(_send())
-            return SendResult(success=True, provider_message_id=str(message.message_id))
+            return SendResult(success=True, provider_message_id=str(getattr(message, "message_id", "")))
         except Exception as exc:
             return SendResult(success=False, error=str(exc))
 
