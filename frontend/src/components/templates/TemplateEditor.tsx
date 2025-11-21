@@ -8,7 +8,7 @@ import { Textarea } from '../ui/textarea';
 import { Badge } from '../ui/badge';
 import { ArrowLeft, Save, Plus, X, Trash2 } from 'lucide-react';
 import type { TemplatePayload, Template } from '../../lib/api';
-import { fetchTemplate, createTemplate, updateTemplate, deleteTemplate } from '../../lib/api';
+import { fetchTemplate, createTemplate, updateTemplate, deleteTemplate, approveTemplate } from '../../lib/api';
 
 interface TemplateEditorProps {
   templateId: string | null;
@@ -29,6 +29,8 @@ const EMPTY_FORM: TemplatePayload = {
   language: 'en',
   subject: '',
   body: '',
+  footer: '',
+  is_default: false,
   variables: [],
   category: '',
 };
@@ -42,6 +44,7 @@ export function TemplateEditor({ templateId, onBack, onSaved }: TemplateEditorPr
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [approving, setApproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -49,7 +52,7 @@ export function TemplateEditor({ templateId, onBack, onSaved }: TemplateEditorPr
     let ignore = false;
     const load = async () => {
       if (isNew) {
-        setForm(EMPTY_FORM);
+        setForm({ ...EMPTY_FORM, channel: 'email', footer: "If you no longer wish to receive these emails, you can unsubscribe here: {{unsubscribe_link}}", is_default: true });
         setVariables([]);
         setLoading(false);
         return;
@@ -68,8 +71,13 @@ export function TemplateEditor({ templateId, onBack, onSaved }: TemplateEditorPr
           language: data.language || 'en',
           subject: data.subject || '',
           body: data.body,
+          footer: data.footer || '',
+          is_default: Boolean(data.is_default),
           variables: normalizedVariables,
           category: data.category || '',
+          approved: data.approved,
+          approved_by: data.approved_by,
+          approved_at: data.approved_at,
         });
         setVariables(normalizedVariables);
       } catch (err) {
@@ -84,8 +92,8 @@ export function TemplateEditor({ templateId, onBack, onSaved }: TemplateEditorPr
     };
   }, [templateId, isNew]);
 
-  const handleChange = (field: keyof TemplatePayload, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+  const handleChange = (field: keyof TemplatePayload, value: string | boolean) => {
+    setForm((prev) => ({ ...prev, [field]: value as any }));
   };
 
   const addVariable = () => setVariables((prev) => [...prev, { name: '', fallback: '' }]);
@@ -128,6 +136,7 @@ export function TemplateEditor({ templateId, onBack, onSaved }: TemplateEditorPr
         .filter((v) => v.name.trim())
         .map((v) => ({ name: v.name.trim(), fallback: v.fallback || '' })),
       subject: form.channel === 'email' ? form.subject || '' : '',
+      footer: form.channel === 'email' ? form.footer || '' : '',
     };
     try {
       let result: Template;
@@ -147,6 +156,8 @@ export function TemplateEditor({ templateId, onBack, onSaved }: TemplateEditorPr
           language: result.language || 'en',
           subject: result.subject || '',
           body: result.body,
+          footer: result.footer || '',
+          is_default: Boolean(result.is_default),
           variables: normalizedVariables,
           category: result.category || '',
         });
@@ -193,6 +204,47 @@ export function TemplateEditor({ templateId, onBack, onSaved }: TemplateEditorPr
             <Save className="w-4 h-4 mr-2" />
             {saving ? 'Saving...' : 'Save Template'}
           </Button>
+          {!isNew && !form.is_default && (
+            <Button variant="outline" onClick={() => handleChange('is_default', true)}>
+              Set Default
+            </Button>
+          )}
+          {!isNew && !form.approved && (
+            <Button variant="outline" onClick={async () => {
+              setApproving(true);
+              setError(null);
+              try {
+                await approveTemplate(templateId!);
+                // reload to capture approved metadata
+                const data = await fetchTemplate(templateId!);
+                const normalizedVariables = (data.variables || []).map((entry) =>
+                  typeof entry === 'string' ? { name: entry, fallback: '' } : { name: entry.name || '', fallback: entry.fallback || '' },
+                );
+                setForm({
+                  name: data.name,
+                  channel: data.channel,
+                  language: data.language || 'en',
+                  subject: data.subject || '',
+                  body: data.body,
+                  footer: data.footer || '',
+                  is_default: Boolean(data.is_default),
+                  variables: normalizedVariables,
+                  category: data.category || '',
+                  approved: data.approved,
+                  approved_by: data.approved_by,
+                  approved_at: data.approved_at,
+                });
+                setVariables(normalizedVariables);
+                setMessage('Template approved.');
+              } catch {
+                setError('Failed to approve template.');
+              } finally {
+                setApproving(false);
+              }
+            }} disabled={approving}>
+              {approving ? 'Approving...' : 'Approve'}
+            </Button>
+          )}
           {!isNew && (
             <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
               <Trash2 className="w-4 h-4 mr-2" />
@@ -222,7 +274,15 @@ export function TemplateEditor({ templateId, onBack, onSaved }: TemplateEditorPr
 
               <div className="space-y-2">
                 <Label>Channel</Label>
-                <Select value={form.channel} onValueChange={(val) => handleChange('channel', val)}>
+                <Select
+                  value={form.channel}
+                  onValueChange={(val) => {
+                    handleChange('channel', val);
+                    if (val === 'email' && !form.footer) {
+                      handleChange('footer', "If you no longer wish to receive these emails, you can unsubscribe here: {{unsubscribe_link}}");
+                    }
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -241,6 +301,32 @@ export function TemplateEditor({ templateId, onBack, onSaved }: TemplateEditorPr
                   <Label>Subject</Label>
                   <Input value={form.subject} onChange={(e) => handleChange('subject', e.target.value)} placeholder="Email subject line" />
                 </div>
+              )}
+
+              {form.channel === 'email' && (
+                <div className="space-y-2">
+                  <Label>Footer (HTML allowed)</Label>
+                  <Textarea
+                    placeholder="Add footer. Include {{unsubscribe_link}} to insert the unsubscribe button."
+                value={form.footer || ''}
+                onChange={(e) => handleChange('footer', e.target.value)}
+                rows={4}
+              />
+              <div className="text-xs text-gray-500">
+                    Default footer includes a clickable unsubscribe link via <code>{'{{unsubscribe_link}}'}</code>.
+              </div>
+            </div>
+          )}
+
+              {form.channel === 'email' && (
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(form.is_default)}
+                    onChange={(e) => handleChange('is_default', e.target.checked)}
+                  />
+                  <span>Set as default template for Email</span>
+                </label>
               )}
             </CardContent>
           </Card>
@@ -315,6 +401,11 @@ export function TemplateEditor({ templateId, onBack, onSaved }: TemplateEditorPr
                   <div className="whitespace-pre-wrap text-gray-900">
                     {previewBody || 'Your message preview will appear here...'}
                   </div>
+                  {form.channel === 'email' && (form.footer?.trim() || form.is_default) && (
+                    <div className="mt-4 pt-3 border-t text-sm text-gray-700 whitespace-pre-wrap">
+                      {form.footer || 'Default footer with {{unsubscribe_link}}'}
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -343,6 +434,25 @@ export function TemplateEditor({ templateId, onBack, onSaved }: TemplateEditorPr
               <div>
                 <span className="font-medium text-gray-800">Variables:</span> {variables.length}
               </div>
+              <div>
+                <span className="font-medium text-gray-800">Approved:</span>{' '}
+                {form.approved ? (
+                  <span className="text-green-700">Yes</span>
+                ) : (
+                  <span className="text-gray-500">No</span>
+                )}
+              </div>
+              {form.approved && (
+                <>
+                  <div>
+                    <span className="font-medium text-gray-800">Approved By:</span> {form.approved_by || '—'}
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-800">Approved At:</span>{' '}
+                    {form.approved_at ? new Date(form.approved_at).toLocaleString() : '—'}
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>

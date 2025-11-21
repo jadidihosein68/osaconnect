@@ -6,8 +6,7 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Textarea } from '../ui/textarea';
 import { Upload, Send } from 'lucide-react';
-import { fetchContacts, Contact, fetchContactGroups, ContactGroup, createEmailJob, uploadEmailAttachment } from '../../lib/api';
-import { useRef } from 'react';
+import { fetchContacts, Contact, fetchContactGroups, ContactGroup, createEmailJob, uploadEmailAttachment, fetchTemplates, Template } from '../../lib/api';
 import { EditorState, Modifier, convertToRaw, ContentState, convertFromHTML } from 'draft-js';
 import draftToHtml from 'draftjs-to-html';
 import { Editor as DraftEditor } from 'react-draft-wysiwyg';
@@ -26,9 +25,13 @@ export function SendMessage() {
   const [selectedGroupIds, setSelectedGroupIds] = useState<number[]>([]);
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('<p></p>');
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [lastExclusions, setLastExclusions] = useState<any[]>([]);
+  const [lastJobBatch, setLastJobBatch] = useState<any | null>(null);
   const [attachments, setAttachments] = useState<{ id: number; name: string; size: number; type: string }[]>([]);
   const [htmlMode, setHtmlMode] = useState(false);
   const [editorState, setEditorState] = useState(() => EditorState.createEmpty());
@@ -36,9 +39,24 @@ export function SendMessage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [cData, gData] = await Promise.all([fetchContacts(), fetchContactGroups()]);
+        const [cData, gData, tData] = await Promise.all([fetchContacts(), fetchContactGroups(), fetchTemplates()]);
+        const emailTemplates = tData.filter((t) => t.channel === 'email');
         setContacts(cData.filter((c) => c.email));
         setGroups(gData);
+        setTemplates(emailTemplates);
+        const defaultTpl = emailTemplates.find((t) => t.is_default) || emailTemplates[0];
+        if (defaultTpl) {
+          setSelectedTemplateId(String(defaultTpl.id));
+          setSubject(defaultTpl.subject || '');
+          setBody(defaultTpl.body || '');
+          try {
+            const blocksFromHTML = convertFromHTML(defaultTpl.body || '');
+            const cs = ContentState.createFromBlockArray(blocksFromHTML.contentBlocks, blocksFromHTML.entityMap);
+            setEditorState(EditorState.createWithContent(cs));
+          } catch {
+            /* ignore */
+          }
+        }
       } catch {
         setError('Failed to load contacts/groups');
       }
@@ -67,8 +85,11 @@ export function SendMessage() {
         contact_ids: selectedContactIds,
         group_ids: selectedGroupIds,
         attachment_ids: attachments.map((a) => a.id),
+        template_id: selectedTemplateId ? Number(selectedTemplateId) : undefined,
       });
-    setSuccess(`Email queued successfully. Excluded: ${job.excluded_count || 0}`);
+      setSuccess(`Email queued successfully. Excluded: ${job.excluded_count || 0}`);
+      setLastExclusions(job.exclusions || []);
+      setLastJobBatch(job.batch_config || null);
       setBody('');
       setSubject('');
       setSelectedContactIds([]);
@@ -156,6 +177,41 @@ export function SendMessage() {
             <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" />
           </div>
 
+          <div className="space-y-2">
+            <Label>Template</Label>
+            <Select
+              value={selectedTemplateId}
+              onValueChange={(val) => {
+                setSelectedTemplateId(val);
+                const tpl = templates.find((t) => String(t.id) === val);
+                if (tpl) {
+                  setSubject(tpl.subject || tpl.name || '');
+                  setBody(tpl.body || '');
+                  try {
+                    const blocksFromHTML = convertFromHTML(tpl.body || '');
+                    const cs = ContentState.createFromBlockArray(blocksFromHTML.contentBlocks, blocksFromHTML.entityMap);
+                    const st = EditorState.createWithContent(cs);
+                    setEditorState(st);
+                  } catch {
+                    /* ignore */
+                  }
+                }
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Choose a template (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                {templates.map((t) => (
+                  <SelectItem key={t.id} value={String(t.id)}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+                {templates.length === 0 && <SelectItem value="none" disabled>No templates</SelectItem>}
+              </SelectContent>
+            </Select>
+          </div>
+
             <div className="space-y-2">
               <Label>Body (HTML allowed)</Label>
               <div className="flex items-center justify-between mb-2 text-sm">
@@ -189,7 +245,7 @@ export function SendMessage() {
                 )}
               </div>
             <div className="flex flex-wrap gap-2 text-sm mt-2">
-              {['{{first_name}}', '{{last_name}}', '{{full_name}}', '{{company_name}}'].map((v) => (
+              {['{{first_name}}', '{{last_name}}', '{{full_name}}', '{{company_name}}', '{{unsubscribe_link}}'].map((v) => (
                 <Button
                   key={v}
                   size="sm"
@@ -238,10 +294,27 @@ export function SendMessage() {
             </div>
           </div>
 
-            <Button className="w-full" onClick={handleSend} disabled={loading}>
-              <Send className="w-4 h-4 mr-2" />
-              {loading ? 'Sending...' : 'Send Message'}
-            </Button>
+            <div className="space-y-3">
+              {lastJobBatch && (
+                <p className="text-sm text-gray-600">
+                  Batch: {lastJobBatch.batch_size} per {lastJobBatch.batch_delay_seconds}s, retries {lastJobBatch.max_retries} (delay {lastJobBatch.retry_delay_seconds}s)
+                </p>
+              )}
+              <Button className="w-full" onClick={handleSend} disabled={loading}>
+                <Send className="w-4 h-4 mr-2" />
+                {loading ? 'Sending...' : 'Send Message'}
+              </Button>
+              {lastExclusions.length > 0 && (
+                <div className="text-sm text-gray-700 border rounded p-2">
+                  Excluded recipients:
+                  <ul className="list-disc list-inside max-h-32 overflow-y-auto">
+                    {lastExclusions.map((ex, idx) => (
+                      <li key={idx}>{ex.email || ex.contact_id} — {ex.reason}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -258,9 +331,25 @@ export function SendMessage() {
                 </div>
               </div>
               <div className="bg-white rounded-lg p-4 shadow-sm">
-                <div className="whitespace-pre-wrap text-gray-900">
-                  {body || 'Compose your email to preview it here.'}
+                <div className="text-gray-500 text-sm mb-2">
+                  <div>From: (SendGrid default)</div>
+                  <div>Subject: {subject || '—'}</div>
                 </div>
+                <div className="prose max-w-none text-gray-900" dangerouslySetInnerHTML={{ __html: body || '<p>Compose your email to preview it here.</p>' }} />
+                {templates.length > 0 && (
+                  <div className="mt-4 pt-3 border-t">
+                    <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Footer (from template)</div>
+                    <div
+                      className="prose max-w-none text-sm text-gray-700"
+                      dangerouslySetInnerHTML={{
+                        __html:
+                          templates.find((t) => String(t.id) === selectedTemplateId)?.footer ||
+                          templates.find((t) => t.is_default && t.channel === 'email')?.footer ||
+                          '',
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>

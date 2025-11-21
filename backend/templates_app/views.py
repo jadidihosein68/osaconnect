@@ -43,4 +43,11 @@ class MessageTemplateViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         org = get_current_org(self.request)
-        serializer.save(organization=org)
+        instance = serializer.save(organization=org)
+        if instance.is_default:
+            MessageTemplate.objects.filter(organization=org, channel=instance.channel).exclude(pk=instance.pk).update(is_default=False)
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        if instance.is_default:
+            MessageTemplate.objects.filter(organization=instance.organization, channel=instance.channel).exclude(pk=instance.pk).update(is_default=False)

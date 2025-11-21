@@ -248,27 +248,33 @@ def _render_body(job: EmailJob, recipient: EmailRecipient) -> str:
         "{{last_name}}": last_name,
         "{{full_name}}": full_name,
         "{{company_name}}": company_name,
+        "{{unsubscribe_link}}": "",
     }
     body = job.body_html or job.body_text or ""
     for placeholder, value in substitutions.items():
         body = body.replace(placeholder, value)
 
     unsubscribe_link = _build_unsubscribe_link(job.organization_id, recipient)
+    unsubscribe_html = ""
     if unsubscribe_link:
-        footer_html = (
-            f"<div style='margin-top:16px;font-size:12px;color:#6b7280;'>"
-            f"{FOOTER_TEXT}<br />"
+        unsubscribe_html = (
             f"<a href='{unsubscribe_link}' "
             f"style='display:inline-block;margin-top:8px;padding:8px 12px;background:#e5e7eb;border-radius:6px;color:#111827;text-decoration:none;'>"
-            f"Unsubscribe</a></div>"
+            f"Unsubscribe</a>"
         )
-        if "<html" in body.lower() or "<p" in body.lower() or "<div" in body.lower():
-          # treat as html
-            body = body + footer_html
+    footer_source = job.footer_html or f"{FOOTER_TEXT}<br />{unsubscribe_html or unsubscribe_link or ''}"
+    # Replace special variable
+    footer_html = footer_source.replace("{{unsubscribe_link}}", unsubscribe_html or (unsubscribe_link or ""))
+    if footer_html and unsubscribe_link and "{{unsubscribe_link}}" not in footer_source and unsubscribe_html:
+        footer_html = footer_html + "<br />" + unsubscribe_html
+
+    if footer_html:
+        # If body already looks like HTML, append footer as HTML; else append text/plain.
+        if "<html" in body.lower() or "<p" in body.lower() or "<div" in body.lower() or "</" in body:
+            body = body + f"<div style='margin-top:16px;font-size:12px;color:#6b7280;'>{footer_html}</div>"
         else:
-            body = body + f"\n\n{FOOTER_TEXT}\nUnsubscribe: {unsubscribe_link}"
-    else:
-        body = body + f"\n\n{FOOTER_TEXT}"
+            plain_footer = FOOTER_TEXT + ("\n" + unsubscribe_link if unsubscribe_link else "")
+            body = body + f"\n\n{plain_footer}"
     return body
 
 

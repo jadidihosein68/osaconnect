@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Plus, Edit } from 'lucide-react';
-import { fetchTemplates, Template } from '../../lib/api';
+import { fetchTemplates, Template, approveTemplate } from '../../lib/api';
 
 interface TemplateListProps {
   onCreateTemplate: () => void;
@@ -14,22 +14,35 @@ export function TemplateList({ onCreateTemplate, onEditTemplate }: TemplateListP
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchTemplates();
+      setTemplates(data);
+    } catch {
+      setError('Failed to load templates');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await fetchTemplates();
-        setTemplates(data);
-      } catch {
-        setError('Failed to load templates');
-      } finally {
-        setLoading(false);
-      }
-    };
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleApprove = async (id: string) => {
+    setActionError(null);
+    try {
+      await approveTemplate(id);
+      await load();
+    } catch {
+      setActionError('Failed to approve template. Check your permissions.');
+    }
+  };
 
   const getChannelColor = (channel: string) => {
     switch (channel.toLowerCase()) {
@@ -61,6 +74,7 @@ export function TemplateList({ onCreateTemplate, onEditTemplate }: TemplateListP
 
       {/* Templates Grid */}
       {error && <p className="text-red-600 text-sm">{error}</p>}
+      {actionError && <p className="text-red-600 text-sm">{actionError}</p>}
       {loading ? (
         <p>Loading templates...</p>
       ) : (
@@ -73,16 +87,28 @@ export function TemplateList({ onCreateTemplate, onEditTemplate }: TemplateListP
             templates.map((template) => (
               <Card key={template.id} className="hover:shadow-lg transition-shadow">
                 <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <CardTitle className="mb-2">{template.name}</CardTitle>
-                      <Badge className={getChannelColor(template.channel)}>
-                        {template.channel.toUpperCase()}
-                      </Badge>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <CardTitle className="mb-2">{template.name}</CardTitle>
+                        <div className="flex gap-2 items-center flex-wrap">
+                          <Badge className={getChannelColor(template.channel)}>
+                            {template.channel.toUpperCase()}
+                          </Badge>
+                          {template.is_default && template.channel === 'email' && (
+                            <Badge variant="secondary">Default</Badge>
+                          )}
+                        </div>
+                      </div>
+                    <div className="flex gap-1">
+                      {!template.approved && (
+                        <Button variant="outline" size="sm" onClick={() => handleApprove(String(template.id))}>
+                          Approve
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="icon" onClick={() => onEditTemplate(String(template.id))}>
+                        <Edit className="w-4 h-4" />
+                      </Button>
                     </div>
-                    <Button variant="ghost" size="icon" onClick={() => onEditTemplate(String(template.id))}>
-                      <Edit className="w-4 h-4" />
-                    </Button>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">

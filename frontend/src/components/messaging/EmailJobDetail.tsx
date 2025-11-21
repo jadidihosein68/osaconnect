@@ -77,7 +77,24 @@ export function EmailJobDetail() {
               )}
               {job.error && <div className="text-red-600">Error: {job.error}</div>}
               {job.attachments && job.attachments.length > 0 && (
-                <div className="text-gray-700">Attachments: {job.attachments.map((a: any) => a.filename || a.name).join(', ')}</div>
+                <div className="text-gray-700">
+                  Attachments:{' '}
+                  {job.attachments.map((a: any, idx: number) => {
+                    const label = a.filename || a.name;
+                    const href = a.path ? `/media/${a.path}` : undefined;
+                    return (
+                      <span key={idx} className="mr-2">
+                        {href ? (
+                          <a className="text-indigo-600 underline" href={href} target="_blank" rel="noreferrer">
+                            {label}
+                          </a>
+                        ) : (
+                          label
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
               )}
               {job.exclusions && job.exclusions.length > 0 && (
                 <div className="text-sm text-gray-700">

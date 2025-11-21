@@ -5,6 +5,7 @@ from rest_framework import serializers
 from contacts.models import Contact
 from contacts.serializers import ContactSerializer
 from templates_app.models import MessageTemplate
+from templates_app.serializers import MessageTemplateSerializer
 from .models import InboundMessage, OutboundMessage, EmailJob, EmailRecipient, EmailAttachment
 from urllib.parse import urlparse
 import logging
@@ -114,6 +115,7 @@ class EmailRecipientSerializer(serializers.ModelSerializer):
 class EmailJobSerializer(serializers.ModelSerializer):
     recipients = EmailRecipientSerializer(many=True, read_only=True)
     batch_config = serializers.SerializerMethodField()
+    template = MessageTemplateSerializer(read_only=True)
 
     class Meta:
         model = EmailJob
@@ -122,6 +124,7 @@ class EmailJobSerializer(serializers.ModelSerializer):
             "subject",
             "body_html",
             "body_text",
+            "footer_html",
             "status",
             "total_recipients",
             "sent_count",
@@ -136,6 +139,7 @@ class EmailJobSerializer(serializers.ModelSerializer):
             "completed_at",
             "recipients",
             "batch_config",
+            "template",
         ]
         read_only_fields = [
             "status",
@@ -150,6 +154,8 @@ class EmailJobSerializer(serializers.ModelSerializer):
             "completed_at",
             "recipients",
             "batch_config",
+            "footer_html",
+            "template",
         ]
 
     def get_batch_config(self, obj):
@@ -171,6 +177,12 @@ class EmailJobCreateSerializer(serializers.Serializer):
     attachment_ids = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=True)
     contact_ids = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=True)
     group_ids = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=True)
+    template_id = serializers.PrimaryKeyRelatedField(
+        source="template",
+        queryset=MessageTemplate.objects.all(),
+        required=False,
+        allow_null=True,
+    )
 
     def validate(self, attrs):
         if not attrs.get("contact_ids") and not attrs.get("group_ids"):
@@ -183,6 +195,7 @@ class EmailJobCreateSerializer(serializers.Serializer):
         user = request.user if request and request.user.is_authenticated else None
         contact_ids = validated_data.get("contact_ids") or []
         group_ids = validated_data.get("group_ids") or []
+        template = validated_data.get("template")
 
         contacts = Contact.objects.none()
         if contact_ids:
@@ -219,12 +232,22 @@ class EmailJobCreateSerializer(serializers.Serializer):
         if not valid_contacts:
             raise serializers.ValidationError("No valid recipients after filtering.")
 
+        footer_html = ""
+        if template and template.organization_id != org.id:
+            template = None
+        if not template:
+            template = MessageTemplate.objects.filter(organization=org, channel=MessageTemplate.CHANNEL_EMAIL, is_default=True).first()
+        if template and template.footer:
+            footer_html = template.footer
+
         job = EmailJob.objects.create(
             organization=org,
             user=user,
+            template=template,
             subject=validated_data["subject"],
             body_html=validated_data["body_html"],
             body_text=validated_data.get("body_text") or "",
+            footer_html=footer_html,
             status=EmailJob.STATUS_QUEUED,
             total_recipients=len(valid_contacts),
             excluded_count=excluded,

@@ -54,6 +54,23 @@ class Command(BaseCommand):
                 },
             )
 
+            # Ensure a default email template with unsubscribe footer exists
+            MessageTemplate.objects.get_or_create(
+                organization=org,
+                name="default_email",
+                defaults={
+                    "channel": "email",
+                    "language": "en",
+                    "subject": "Hello from Corbi",
+                    "body": "<p>Hi {{first_name}},</p><p>Thanks for being with us.</p>",
+                    "footer": "<p style='font-size:12px;color:#6b7280;'>If you no longer wish to receive these emails, click here: {{unsubscribe_link}}</p>",
+                    "variables": ["first_name", "unsubscribe_link"],
+                    "approved": True,
+                    "approved_by": "seed",
+                    "is_default": True,
+                },
+            )
+
             now = timezone.now()
             OutboundMessage.objects.get_or_create(
                 organization=org,

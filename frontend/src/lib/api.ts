@@ -41,8 +41,15 @@ export interface Template {
   language: string;
   subject: string;
   body: string;
-  variables: string[];
-  approved: boolean;
+  variables: any[];
+  category?: string;
+  footer?: string;
+  is_default?: boolean;
+  approved?: boolean;
+  approved_by?: string;
+  approved_at?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface OutboundMessage {
@@ -292,6 +299,11 @@ export type TemplatePayload = {
   body: string;
   variables: TemplateVariable[];
   category?: string;
+  footer?: string;
+  is_default?: boolean;
+  approved?: boolean;
+  approved_by?: string;
+  approved_at?: string;
 };
 
 export async function createTemplate(payload: TemplatePayload): Promise<Template> {
@@ -306,6 +318,11 @@ export async function updateTemplate(id: number | string, payload: Partial<Templ
 
 export async function deleteTemplate(id: number | string) {
   await api.delete(`/templates/${id}/`);
+}
+
+export async function approveTemplate(id: number | string): Promise<{ status: string; id: number }> {
+  const { data } = await api.post(`/templates/${id}/approve/`);
+  return data;
 }
 
 export async function fetchContactGroups(): Promise<ContactGroup[]> {

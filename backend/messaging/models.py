@@ -124,9 +124,11 @@ class EmailJob(models.Model):
 
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="email_jobs")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    template = models.ForeignKey("templates_app.MessageTemplate", null=True, blank=True, on_delete=models.SET_NULL)
     subject = models.CharField(max_length=255)
     body_html = models.TextField()
     body_text = models.TextField(blank=True, default="")
+    footer_html = models.TextField(blank=True, default="")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_QUEUED)
     total_recipients = models.PositiveIntegerField(default=0)
     sent_count = models.PositiveIntegerField(default=0)

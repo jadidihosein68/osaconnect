@@ -23,6 +23,8 @@ class MessageTemplate(models.Model):
     body = models.TextField()
     variables = models.JSONField(default=list, blank=True)
     category = models.CharField(max_length=64, blank=True, default="")
+    footer = models.TextField(blank=True, default="")
+    is_default = models.BooleanField(default=False)
     approved = models.BooleanField(default=False)
     approved_by = models.CharField(max_length=120, blank=True, default="")
     approved_at = models.DateTimeField(blank=True, null=True)
@@ -32,6 +34,9 @@ class MessageTemplate(models.Model):
     class Meta:
         ordering = ["name"]
         unique_together = ("organization", "name")
+        indexes = [
+            models.Index(fields=["organization", "channel", "is_default"]),
+        ]
 
     def __str__(self) -> str:
         return f"{self.name} ({self.channel})"
