@@ -18,6 +18,7 @@ from .models import Suppression
 from django.utils import timezone
 import secrets
 from messaging.channels import EmailSender, TelegramSender, WhatsAppSender
+from messaging.utils import build_media_url_from_request
 from contacts.models import Contact
 from django.conf import settings
 from contacts.serializers import ContactSerializer
@@ -384,7 +385,7 @@ class TelegramMessageViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, vie
                         "name": attachment.filename,
                         "content_type": attachment.content_type,
                         "size": attachment.size,
-                        "url": attachment.file.url if hasattr(attachment.file, "url") else "",
+                        "url": build_media_url_from_request(attachment.file, request),
                     }
                 )
 
@@ -522,7 +523,10 @@ class WhatsAppMessageViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, vie
                 if not attachment.file:
                     return Response({"detail": f"Attachment file missing for {attachment.filename}"}, status=400)
                 # Twilio requires a publicly accessible URL; assume MEDIA_URL is reachable.
-                url = request.build_absolute_uri(attachment.file.url) if hasattr(attachment.file, "url") else ""
+                url = build_media_url_from_request(attachment.file, request)
+                if url.startswith("http://localhost") or url.startswith("http://127.0.0.1"):
+                    # Twilio cannot reach localhost; surface a clear error
+                    return Response({"detail": "Attachment URL is not publicly accessible. Configure a public MEDIA_URL/host."}, status=400)
                 attachments_payload.append(
                     {
                         "id": attachment.id,
