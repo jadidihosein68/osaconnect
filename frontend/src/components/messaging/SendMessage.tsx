@@ -21,6 +21,9 @@ import {
   fetchWhatsAppMessages,
   sendWhatsAppMessage,
   WhatsAppMessage,
+  fetchInstagramMessages,
+  sendInstagramMessage,
+  InstagramMessage,
 } from '../../lib/api';
 import { EditorState, Modifier, convertToRaw, ContentState, convertFromHTML } from 'draft-js';
 import draftToHtml from 'draftjs-to-html';
@@ -39,6 +42,7 @@ export function SendMessage() {
   const [selectedContactIds, setSelectedContactIds] = useState<number[]>([]);
   const [selectedTelegramContactId, setSelectedTelegramContactId] = useState<number | null>(null);
   const [selectedWhatsAppContactId, setSelectedWhatsAppContactId] = useState<number | null>(null);
+  const [selectedInstagramContactId, setSelectedInstagramContactId] = useState<number | null>(null);
   const [selectedGroupIds, setSelectedGroupIds] = useState<number[]>([]);
   const [recipientSearch, setRecipientSearch] = useState('');
   const [subject, setSubject] = useState('');
@@ -55,6 +59,7 @@ export function SendMessage() {
   const [attachments, setAttachments] = useState<{ id: number; name: string; size: number; type: string }[]>([]);
   const [telegramAttachments, setTelegramAttachments] = useState<{ id: number; name: string; size: number; type: string }[]>([]);
   const [whatsappAttachments, setWhatsAppAttachments] = useState<{ id: number; name: string; size: number; type: string }[]>([]);
+  const [instagramAttachments] = useState<{ id: number; name: string; size: number; type: string }[]>([]);
   const [htmlMode, setHtmlMode] = useState(false);
   const [editorState, setEditorState] = useState(() => EditorState.createEmpty());
   const [telegramMessages, setTelegramMessages] = useState<TelegramMessage[]>([]);
@@ -63,6 +68,9 @@ export function SendMessage() {
   const [whatsappMessages, setWhatsAppMessages] = useState<WhatsAppMessage[]>([]);
   const [whatsappLoading, setWhatsAppLoading] = useState(false);
   const [whatsappError, setWhatsAppError] = useState<string | null>(null);
+  const [instagramMessages, setInstagramMessages] = useState<InstagramMessage[]>([]);
+  const [instagramLoading, setInstagramLoading] = useState(false);
+  const [instagramError, setInstagramError] = useState<string | null>(null);
   const convoRef = useRef<HTMLDivElement | null>(null);
   const scrollAnchorRef = useRef<HTMLDivElement | null>(null);
 
@@ -144,6 +152,31 @@ export function SendMessage() {
     };
   }, [channel, selectedWhatsAppContactId]);
 
+  // Poll Instagram messages
+  useEffect(() => {
+    let timer: any;
+    const poll = async () => {
+      if (channel !== 'instagram' || !selectedInstagramContactId) return;
+      setInstagramLoading(true);
+      setInstagramError(null);
+      try {
+        const msgs = await fetchInstagramMessages(selectedInstagramContactId);
+        setInstagramMessages(msgs);
+      } catch {
+        setInstagramError('Failed to load conversation.');
+      } finally {
+        setInstagramLoading(false);
+      }
+    };
+    poll();
+    if (channel === 'instagram' && selectedInstagramContactId) {
+      timer = setInterval(poll, 3000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [channel, selectedInstagramContactId]);
+
   const onboardedContacts = useMemo(
     () => contacts.filter((c) => c.telegram_status === 'onboarded' && c.telegram_chat_id),
     [contacts],
@@ -156,6 +189,14 @@ export function SendMessage() {
   const selectedTelegramContact = useMemo(
     () => contacts.find((c) => c.id === selectedTelegramContactId) || null,
     [contacts, selectedTelegramContactId],
+  );
+  const instagramEligible = useMemo(
+    () => contacts.filter((c) => c.instagram_opt_in && c.instagram_user_id && !c.instagram_blocked),
+    [contacts],
+  );
+  const selectedInstagramContact = useMemo(
+    () => contacts.find((c) => c.id === selectedInstagramContactId) || null,
+    [contacts, selectedInstagramContactId],
   );
   const filteredOnboarded = useMemo(
     () =>
@@ -177,6 +218,17 @@ export function SendMessage() {
       }),
     [whatsappEligible, recipientSearch],
   );
+  const filteredInstagram = useMemo(
+    () =>
+      instagramEligible.filter((c) => {
+        const term = recipientSearch.toLowerCase();
+        return (
+          c.full_name.toLowerCase().includes(term) ||
+          (c.email || '').toLowerCase().includes(term)
+        );
+      }),
+    [instagramEligible, recipientSearch],
+  );
   useEffect(() => {
     if (channel !== 'telegram' || !selectedTelegramContactId) {
       setTelegramMessages([]);
@@ -191,6 +243,13 @@ export function SendMessage() {
     }
   }, [channel, selectedWhatsAppContactId]);
 
+  useEffect(() => {
+    if (channel !== 'instagram' || !selectedInstagramContactId) {
+      setInstagramMessages([]);
+      setInstagramError(null);
+    }
+  }, [channel, selectedInstagramContactId]);
+
   // Auto-scroll to latest message when the list updates
   useEffect(() => {
     if (channel !== 'telegram' && channel !== 'whatsapp') return;
@@ -201,12 +260,62 @@ export function SendMessage() {
     }
   }, [telegramMessages, whatsappMessages, channel]);
 
-  const activeContact = channel === 'telegram' ? selectedTelegramContact : channel === 'whatsapp' ? selectedWhatsAppContact : null;
-  const conversationMessages = channel === 'telegram' ? telegramMessages : channel === 'whatsapp' ? whatsappMessages : [];
-  const conversationLoading = channel === 'telegram' ? telegramLoading : channel === 'whatsapp' ? whatsappLoading : false;
-  const conversationError = channel === 'telegram' ? telegramError : channel === 'whatsapp' ? whatsappError : null;
+  const activeContact =
+    channel === 'telegram'
+      ? selectedTelegramContact
+      : channel === 'whatsapp'
+        ? selectedWhatsAppContact
+        : channel === 'instagram'
+          ? selectedInstagramContact
+          : null;
+  const conversationMessages =
+    channel === 'telegram'
+      ? telegramMessages
+      : channel === 'whatsapp'
+        ? whatsappMessages
+        : channel === 'instagram'
+          ? instagramMessages
+          : [];
+  const conversationLoading =
+    channel === 'telegram' ? telegramLoading : channel === 'whatsapp' ? whatsappLoading : channel === 'instagram' ? instagramLoading : false;
+  const conversationError =
+    channel === 'telegram' ? telegramError : channel === 'whatsapp' ? whatsappError : channel === 'instagram' ? instagramError : null;
 
   const handleSend = async () => {
+    if (channel === 'instagram') {
+      if (!selectedInstagramContactId) {
+        setError('Select a contact for Instagram.');
+        return;
+      }
+      const selectedContact = contacts.find((c) => c.id === selectedInstagramContactId);
+      if (!selectedContact || !selectedContact.instagram_user_id) {
+        setError('Contact is not onboarded to Instagram.');
+        return;
+      }
+      const textOnly = (whatsappText || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, '').trim();
+      const text = textOnly || whatsappText.trim();
+      if (!text) {
+        setError('Message cannot be empty.');
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      setSuccess(null);
+      try {
+        await sendInstagramMessage(selectedInstagramContactId, { text });
+        setSuccess('Instagram message sent.');
+        setWhatsAppText('');
+        const msgs = await fetchInstagramMessages(selectedInstagramContactId);
+        setInstagramMessages(msgs);
+      } catch (e: any) {
+        const serverDetail = e?.response?.data?.detail;
+        setError(serverDetail || 'Failed to send Instagram message');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     if (channel === 'whatsapp') {
       if (!selectedWhatsAppContactId) {
         setError('Select a contact for WhatsApp.');
@@ -351,11 +460,14 @@ export function SendMessage() {
                   setSelectedGroupIds([]);
                   setSelectedTelegramContactId(null);
                   setSelectedWhatsAppContactId(null);
+                  setSelectedInstagramContactId(null);
                   setEmailBody('<p></p>');
                   setTelegramText('');
                   setTelegramAttachments([]);
                   setWhatsAppText('');
                   setWhatsAppAttachments([]);
+                  setInstagramMessages([]);
+                  setInstagramError(null);
                 }}
               >
                 <SelectTrigger>
@@ -365,6 +477,7 @@ export function SendMessage() {
                   <SelectItem value="email">Email (SendGrid)</SelectItem>
                   <SelectItem value="telegram">Telegram</SelectItem>
                   <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                  <SelectItem value="instagram">Instagram</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -645,6 +758,41 @@ export function SendMessage() {
                 <p className="text-sm text-gray-600">Only contacts with WhatsApp numbers appear here.</p>
               </>
             )}
+
+            {channel === 'instagram' && (
+              <>
+                <div className="space-y-2">
+                  <Label>Search Contacts</Label>
+                  <Input
+                    placeholder="Search by name or email"
+                    value={recipientSearch}
+                    onChange={(e) => setRecipientSearch(e.target.value)}
+                  />
+                </div>
+                <div className="h-64 overflow-y-auto border rounded p-2 space-y-2 bg-white">
+                  {filteredInstagram.map((c) => {
+                    const selected = selectedInstagramContactId === c.id;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className={`w-full text-left px-3 py-2 rounded border ${selected ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-indigo-200 hover:bg-gray-50'}`}
+                        onClick={() => setSelectedInstagramContactId(c.id)}
+                      >
+                        <div className="font-medium text-sm text-gray-900">{c.full_name}</div>
+                        <div className="text-xs text-gray-600">{c.email || '—'}</div>
+                      </button>
+                    );
+                  })}
+                  {filteredInstagram.length === 0 && (
+                    <div className="text-gray-500 text-sm">
+                      No Instagram-onboarded contacts found. A user must DM your Instagram account first.
+                    </div>
+                  )}
+                </div>
+                <p className="text-sm text-gray-600">Only contacts who messaged you on Instagram appear here.</p>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -698,6 +846,9 @@ export function SendMessage() {
                   {channel === 'whatsapp' && activeContact?.phone_whatsapp && (
                     <div className="text-xs text-gray-600">{activeContact.phone_whatsapp}</div>
                   )}
+                  {channel === 'instagram' && activeContact?.instagram_user_id && (
+                    <div className="text-xs text-gray-600">IG ID: {activeContact.instagram_user_id}</div>
+                  )}
                 </div>
                 <div className="w-60">
                   {channel === 'telegram' && (
@@ -729,6 +880,24 @@ export function SendMessage() {
                       </SelectTrigger>
                       <SelectContent>
                         {filteredWhatsApp.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>
+                            {c.full_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {channel === 'instagram' && (
+                    <Select
+                      disabled={filteredInstagram.length === 0}
+                      value={selectedInstagramContactId ? String(selectedInstagramContactId) : ''}
+                      onValueChange={(val) => setSelectedInstagramContactId(Number(val))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose contact" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {filteredInstagram.map((c) => (
                           <SelectItem key={c.id} value={String(c.id)}>
                             {c.full_name}
                           </SelectItem>

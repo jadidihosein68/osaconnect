@@ -10,7 +10,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from assistant.views import AssistantView
 from bookings.views import BookingViewSet
 from contacts.views import ContactViewSet, ContactGroupViewSet
-from messaging.views import InboundMessageViewSet, OutboundMessageViewSet, EmailJobViewSet, EmailAttachmentViewSet, unsubscribe, TelegramOnboardingViewSet, TelegramOnboardWebhook, TelegramMessageViewSet, WhatsAppMessageViewSet, TwilioWhatsAppWebhook, TwilioWhatsAppStatusWebhook
+from messaging.views import InboundMessageViewSet, OutboundMessageViewSet, EmailJobViewSet, EmailAttachmentViewSet, unsubscribe, TelegramOnboardingViewSet, TelegramOnboardWebhook, TelegramMessageViewSet, WhatsAppMessageViewSet, TwilioWhatsAppWebhook, TwilioWhatsAppStatusWebhook, InstagramMessageViewSet, InstagramWebhook
 from monitoring.views import HealthcheckView, MetricsView, MonitoringSummaryView, SettingsView, MonitoringDetailView, MonitoringEventsView, MonitoringAlertsView
 from organizations.views import MembershipViewSet
 from templates_app.views import MessageTemplateViewSet
@@ -35,6 +35,7 @@ router.register(r"billing/logs", BillingLogViewSet, basename="billing-log")
 router.register(r"telegram/onboarding", TelegramOnboardingViewSet, basename="telegram-onboarding")
 router.register(r"telegram/messages", TelegramMessageViewSet, basename="telegram-messages")
 router.register(r"whatsapp/messages", WhatsAppMessageViewSet, basename="whatsapp-messages")
+router.register(r"instagram/messages", InstagramMessageViewSet, basename="instagram-messages")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -45,6 +46,7 @@ urlpatterns = [
     path("api/webhooks/twilio/whatsapp/", TwilioWhatsAppWebhook.as_view(), name="twilio_whatsapp_webhook"),
     path("api/callbacks/twilio/whatsapp/status/", TwilioWhatsAppStatusWebhook.as_view(), name="twilio_whatsapp_status"),
     path("api/webhooks/telegram/onboard/", TelegramOnboardWebhook.as_view(), name="telegram_onboard_webhook"),
+    path("api/webhooks/meta/instagram/", InstagramWebhook.as_view(), name="instagram_webhook"),
     path("api/assistant/", AssistantView.as_view(), name="assistant"),
     path("unsubscribe/", unsubscribe, name="unsubscribe"),
     path("health/", HealthcheckView.as_view(), name="healthcheck"),

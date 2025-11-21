@@ -10,8 +10,8 @@ import logging
 from organizations.utils import get_current_org
 from organizations.permissions import IsOrgMemberWithRole
 
-from .models import InboundMessage, OutboundMessage, EmailJob, EmailAttachment, EmailRecipient, TelegramInviteToken, TelegramMessage, WhatsAppMessage
-from .serializers import InboundMessageSerializer, OutboundMessageSerializer, EmailJobSerializer, EmailJobCreateSerializer, EmailRecipientSerializer, TelegramInviteTokenSerializer, TelegramMessageSerializer, WhatsAppMessageSerializer
+from .models import InboundMessage, OutboundMessage, EmailJob, EmailAttachment, EmailRecipient, TelegramInviteToken, TelegramMessage, WhatsAppMessage, InstagramMessage
+from .serializers import InboundMessageSerializer, OutboundMessageSerializer, EmailJobSerializer, EmailJobCreateSerializer, EmailRecipientSerializer, TelegramInviteTokenSerializer, TelegramMessageSerializer, WhatsAppMessageSerializer, InstagramMessageSerializer
 from .serializers_extra import EmailAttachmentSerializer
 from .tasks import process_email_job
 from .models import Suppression
@@ -691,4 +691,132 @@ class TwilioWhatsAppStatusWebhook(APIView):
                 setattr(msg, k, v)
             msg.save(update_fields=list(updates.keys()))
 
+        return Response({"status": "ok"})
+
+
+class InstagramMessageViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
+    permission_classes = [IsOrgMemberWithRole]
+    serializer_class = InstagramMessageSerializer
+
+    def get_queryset(self):
+        org = get_current_org(self.request)
+        qs = InstagramMessage.objects.filter(organization=org).select_related("contact")
+        contact_id = self.request.query_params.get("contact_id")
+        if contact_id:
+            qs = qs.filter(contact_id=contact_id)
+        return qs.order_by("created_at")
+
+    def create(self, request, *args, **kwargs):
+        org = get_current_org(request)
+        contact_id = request.data.get("contact_id")
+        text = (request.data.get("text") or "").strip()
+        if not contact_id:
+            return Response({"detail": "contact_id required"}, status=400)
+        if not text:
+            return Response({"detail": "Message text required"}, status=400)
+        try:
+            contact = Contact.objects.get(pk=contact_id, organization=org)
+        except Contact.DoesNotExist:
+            return Response({"detail": "Contact not found"}, status=404)
+        if contact.instagram_blocked:
+            return Response({"detail": "Contact is blocked on Instagram"}, status=400)
+        if not contact.instagram_user_id:
+            return Response({"detail": "Contact is not onboarded to Instagram"}, status=400)
+
+        try:
+            integ = Integration.objects.get(organization=org, provider="instagram", is_active=True)
+            token_plain = decrypt_token(getattr(integ, "token", "") or getattr(integ, "token_encrypted", "") or "")
+            extra = getattr(integ, "extra", {}) if hasattr(integ, "extra") else {}
+            business_id = extra.get("instagram_business_account_id") or extra.get("business_id") or extra.get("instagram_scoped_id")
+            if not token_plain or not business_id:
+                return Response({"detail": "Instagram is not configured for this organization."}, status=400)
+            msg = InstagramMessage.objects.create(
+                organization=org,
+                contact=contact,
+                direction=InstagramMessage.DIR_OUTBOUND,
+                message_type=InstagramMessage.TYPE_TEXT,
+                text=text,
+                status=InstagramMessage.STATUS_SENT,
+            )
+            sender = InstagramSender()
+            send_res = sender.send(
+                to=contact.instagram_user_id,
+                body=text,
+                credentials={"token": token_plain, "extra": {"instagram_scoped_id": business_id}},
+            )
+            if send_res.success:
+                msg.provider_message_id = send_res.provider_message_id or ""
+                msg.save(update_fields=["provider_message_id"])
+                contact.instagram_last_outbound_at = timezone.now()
+                contact.save(update_fields=["instagram_last_outbound_at"])
+                return Response(InstagramMessageSerializer(msg).data, status=201)
+            msg.status = InstagramMessage.STATUS_FAILED
+            msg.error_reason = send_res.error or "unknown error"
+            msg.save(update_fields=["status", "error_reason"])
+            return Response({"detail": f"Instagram send failed: {msg.error_reason}"}, status=502)
+        except Integration.DoesNotExist:
+            return Response({"detail": "Instagram is not configured for this organization."}, status=400)
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "Instagram send exception",
+                exc_info=True,
+                extra={"org": org.id, "contact": contact.id, "ig_user": contact.instagram_user_id},
+            )
+            return Response({"detail": f"Instagram send error: {exc}"}, status=500)
+
+
+class InstagramWebhook(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        # Simplified handler: expect sender_id, recipient_id, text, timestamp
+        sender_id = request.data.get("sender_id") or request.data.get("sender") or ""
+        recipient_id = request.data.get("recipient_id") or request.data.get("recipient") or ""
+        text = request.data.get("text") or ""
+        ts = request.data.get("timestamp")
+
+        if not sender_id or not recipient_id:
+            return Response({"detail": "missing sender/recipient"}, status=400)
+
+        # Resolve org by recipient_id matching instagram_business_account_id
+        integ = (
+            Integration.objects.filter(provider="instagram", is_active=True, extra__instagram_business_account_id=recipient_id).first()
+            or Integration.objects.filter(provider="instagram", is_active=True, extra__business_id=recipient_id).first()
+        )
+        if not integ:
+            logger.warning("Instagram webhook org not found for recipient=%s", recipient_id)
+            return Response({"detail": "org not found"}, status=200)
+        org = integ.organization
+
+        contact = Contact.objects.filter(organization=org, instagram_user_id=sender_id).first()
+        if not contact:
+            contact = Contact.objects.create(
+                organization=org,
+                full_name="Instagram User",
+                instagram_user_id=sender_id,
+                instagram_opt_in=True,
+                instagram_blocked=False,
+            )
+        else:
+            contact.instagram_opt_in = True
+            contact.instagram_blocked = False
+            contact.instagram_user_id = contact.instagram_user_id or sender_id
+            contact.save(update_fields=["instagram_opt_in", "instagram_blocked", "instagram_user_id"])
+
+        InstagramMessage.objects.create(
+            organization=org,
+            contact=contact,
+            direction=InstagramMessage.DIR_INBOUND,
+            message_type=InstagramMessage.TYPE_TEXT,
+            text=text,
+            status=InstagramMessage.STATUS_RECEIVED,
+        )
+        now = timezone.now()
+        contact.instagram_last_inbound_at = now
+        contact.save(update_fields=["instagram_last_inbound_at"])
+        return Response({"status": "ok"})
+
+    def get(self, request, *args, **kwargs):
+        # Basic verification endpoint if needed
         return Response({"status": "ok"})

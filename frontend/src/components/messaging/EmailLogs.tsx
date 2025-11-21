@@ -55,7 +55,7 @@ export function EmailLogs() {
               </TableHeader>
               <TableBody>
                 {jobs.map((job) => (
-                  <TableRow key={job.id} className="cursor-pointer hover:bg-gray-50" onClick={() => navigate(`/messaging/email-logs/${job.id}`)}>
+                <TableRow key={job.id} className="cursor-pointer hover:bg-gray-50" onClick={() => navigate(`/outbound-logs/email/${job.id}`)}>
                     <TableCell>{job.subject}</TableCell>
                     <TableCell className="capitalize">{job.status}</TableCell>
                     <TableCell>{job.total_recipients}</TableCell>

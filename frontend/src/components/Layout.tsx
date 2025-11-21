@@ -68,7 +68,6 @@ export function Layout({ children, currentScreen, onNavigate, onLogout, organiza
       icon: MessageSquare,
       submenu: [
         { id: '/messaging/send', label: 'Send Message' },
-        { id: '/messaging/email-logs', label: 'Email Logs' },
         { id: '/messaging/campaign', label: 'Campaigns' },
       ]
     },
@@ -76,7 +75,15 @@ export function Layout({ children, currentScreen, onNavigate, onLogout, organiza
     { id: 'templates', label: 'Templates', icon: FileText },
     { id: 'ai-assistant', label: 'AI Assistant', icon: Bot },
     { id: 'bookings', label: 'Bookings', icon: Calendar },
-    { id: 'outbound-logs', label: 'Outbound Logs', icon: Send },
+    { 
+      id: 'outbound-logs', 
+      label: 'Outbound Logs', 
+      icon: Send,
+      submenu: [
+        { id: '/outbound-logs/email', label: 'Email Logs' },
+        // future: add WhatsApp/Telegram outbound here
+      ],
+    },
     { id: 'monitoring', label: 'Monitoring', icon: BarChart3 },
     { id: 'billing', label: 'Billing', icon: CreditCard },
     { id: 'settings', label: 'Settings', icon: SettingsIcon },

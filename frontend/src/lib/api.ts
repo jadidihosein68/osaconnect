@@ -352,6 +352,16 @@ export async function sendWhatsAppMessage(
   return data;
 }
 
+export async function fetchInstagramMessages(contactId: number): Promise<InstagramMessage[]> {
+  const { data } = await api.get(`/instagram/messages/?contact_id=${contactId}`);
+  return data;
+}
+
+export async function sendInstagramMessage(contactId: number, payload: { text: string }): Promise<InstagramMessage> {
+  const { data } = await api.post(`/instagram/messages/`, { contact_id: contactId, ...payload });
+  return data;
+}
+
 export async function fetchTemplates(): Promise<Template[]> {
   const { data } = await api.get("/templates/");
   return data;

@@ -142,26 +142,33 @@ LOGGING = {
         "verbose": {"format": "[{asctime}] {levelname} {name}: {message}", "style": "{"},
     },
     "handlers": {
-        "console": {"class": "logging.StreamHandler", "formatter": "verbose"},
+        # Keep console quieter: warnings and above only
+        "console": {"class": "logging.StreamHandler", "formatter": "verbose", "level": "WARNING"},
+        # Daily rotation at midnight; files suffixed by date; keep 7 days
         "file": {
-            "class": "logging.handlers.RotatingFileHandler",
+            "class": "logging.handlers.TimedRotatingFileHandler",
             "formatter": "verbose",
-            "filename": LOG_DIR / "corbi.log",
-            "maxBytes": 5 * 1024 * 1024,
-            "backupCount": 5,
+            "filename": str(LOG_DIR / "corbi.log"),
+            "when": "midnight",
+            "backupCount": 7,
+            "encoding": "utf-8",
+            "delay": True,
         },
+        # Warnings/errors into a separate daily file, keep 14 days
         "error_file": {
-            "class": "logging.handlers.RotatingFileHandler",
+            "class": "logging.handlers.TimedRotatingFileHandler",
             "formatter": "verbose",
-            "filename": LOG_DIR / "corbi-errors.log",
-            "maxBytes": 5 * 1024 * 1024,
-            "backupCount": 5,
+            "filename": str(LOG_DIR / "corbi-errors.log"),
+            "when": "midnight",
+            "backupCount": 14,
+            "encoding": "utf-8",
             "level": "WARNING",
+            "delay": True,
         },
     },
     "loggers": {
         "django": {
-            "handlers": ["console", "file"],
+            "handlers": ["console", "file", "error_file"],
             "level": os.getenv("DJANGO_LOG_LEVEL", "INFO"),
         },
         "corbi.audit": {

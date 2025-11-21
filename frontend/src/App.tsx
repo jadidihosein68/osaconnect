@@ -219,8 +219,8 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
           element={<TemplateEditorWrapper onBack={() => navigate('/templates')} />}
         />
         <Route path="/messaging/send" element={<SendMessage />} />
-        <Route path="/messaging/email-logs" element={<EmailLogs />} />
-        <Route path="/messaging/email-logs/:id" element={<EmailJobDetail />} />
+        <Route path="/outbound-logs/email" element={<EmailLogs />} />
+        <Route path="/outbound-logs/email/:id" element={<EmailJobDetail />} />
         <Route path="/contacts/telegram-onboarding" element={<TelegramOnboarding />} />
         <Route path="/messaging/campaign" element={<Campaign />} />
         <Route path="/inbound" element={<InboundLogs onViewDetail={(id) => navigate(`/inbound/${id}`)} />} />
