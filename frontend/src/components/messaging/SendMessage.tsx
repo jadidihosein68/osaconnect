@@ -23,6 +23,7 @@ export function SendMessage() {
   const [groups, setGroups] = useState<ContactGroup[]>([]);
   const [selectedContactIds, setSelectedContactIds] = useState<number[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<number[]>([]);
+  const [recipientSearch, setRecipientSearch] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('<p></p>');
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -124,8 +125,15 @@ export function SendMessage() {
 
             <div className="space-y-2">
               <Label>Recipients</Label>
-              <div className="max-h-48 overflow-y-auto border rounded p-2 space-y-2">
-                {contacts.map((c) => {
+              <Input
+                placeholder="Search recipients by name"
+                value={recipientSearch}
+                onChange={(e) => setRecipientSearch(e.target.value)}
+              />
+              <div className="h-56 overflow-y-auto border rounded p-2 space-y-2">
+                {contacts
+                  .filter((c) => c.full_name.toLowerCase().includes(recipientSearch.toLowerCase()))
+                  .map((c) => {
                   const checked = selectedContactIds.includes(c.id);
                   return (
                     <label key={c.id} className="flex items-center gap-2 text-sm">
@@ -143,7 +151,9 @@ export function SendMessage() {
                     </label>
                   );
                 })}
-                {contacts.length === 0 && <div className="text-gray-500 text-sm">No contacts with email.</div>}
+                {contacts.filter((c) => c.full_name.toLowerCase().includes(recipientSearch.toLowerCase())).length === 0 && (
+                  <div className="text-gray-500 text-sm">No recipients found.</div>
+                )}
               </div>
             </div>
 
