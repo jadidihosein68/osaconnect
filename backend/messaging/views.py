@@ -10,15 +10,14 @@ import logging
 from organizations.utils import get_current_org
 from organizations.permissions import IsOrgMemberWithRole
 
-from .models import InboundMessage, OutboundMessage, EmailJob, EmailAttachment, EmailRecipient, TelegramInviteToken, TelegramMessage
-from .serializers import InboundMessageSerializer, OutboundMessageSerializer, EmailJobSerializer, EmailJobCreateSerializer, EmailRecipientSerializer, TelegramInviteTokenSerializer, TelegramMessageSerializer
+from .models import InboundMessage, OutboundMessage, EmailJob, EmailAttachment, EmailRecipient, TelegramInviteToken, TelegramMessage, WhatsAppMessage
+from .serializers import InboundMessageSerializer, OutboundMessageSerializer, EmailJobSerializer, EmailJobCreateSerializer, EmailRecipientSerializer, TelegramInviteTokenSerializer, TelegramMessageSerializer, WhatsAppMessageSerializer
 from .serializers_extra import EmailAttachmentSerializer
 from .tasks import process_email_job
 from .models import Suppression
 from django.utils import timezone
 import secrets
-import logging
-from messaging.channels import EmailSender, TelegramSender
+from messaging.channels import EmailSender, TelegramSender, WhatsAppSender
 from contacts.models import Contact
 from django.conf import settings
 from contacts.serializers import ContactSerializer
@@ -475,3 +474,217 @@ class TelegramMessageViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, vie
             status=status_label,
         )
         return Response(TelegramMessageSerializer(msg).data, status=201)
+
+
+class WhatsAppMessageViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
+    permission_classes = [IsOrgMemberWithRole]
+    serializer_class = WhatsAppMessageSerializer
+
+    def get_queryset(self):
+        org = get_current_org(self.request)
+        qs = WhatsAppMessage.objects.filter(organization=org).select_related("contact")
+        contact_id = self.request.query_params.get("contact_id")
+        if contact_id:
+            qs = qs.filter(contact_id=contact_id)
+        return qs.order_by("created_at")
+
+    def create(self, request, *args, **kwargs):
+        org = get_current_org(request)
+        contact_id = request.data.get("contact_id")
+        text = (request.data.get("text") or "").strip()
+        attachment_ids = request.data.get("attachment_ids") or []
+        if not contact_id:
+            return Response({"detail": "contact_id required"}, status=400)
+        if not text and not attachment_ids:
+            return Response({"detail": "Message text or attachment required"}, status=400)
+        try:
+            contact = Contact.objects.get(pk=contact_id, organization=org)
+        except Contact.DoesNotExist:
+            return Response({"detail": "Contact not found"}, status=404)
+        if contact.whatsapp_blocked:
+            return Response({"detail": "Contact is blocked on WhatsApp"}, status=400)
+        if not contact.phone_whatsapp:
+            return Response({"detail": "Contact missing WhatsApp phone number"}, status=400)
+
+        attachments_payload = []
+        media_urls = []
+        if attachment_ids:
+            if isinstance(attachment_ids, str):
+                try:
+                    attachment_ids = [int(attachment_ids)]
+                except Exception:
+                    attachment_ids = []
+            for att_id in attachment_ids:
+                try:
+                    attachment = EmailAttachment.objects.get(id=att_id, organization=org)
+                except EmailAttachment.DoesNotExist:
+                    return Response({"detail": f"Attachment {att_id} not found"}, status=404)
+                if not attachment.file:
+                    return Response({"detail": f"Attachment file missing for {attachment.filename}"}, status=400)
+                # Twilio requires a publicly accessible URL; assume MEDIA_URL is reachable.
+                url = request.build_absolute_uri(attachment.file.url) if hasattr(attachment.file, "url") else ""
+                attachments_payload.append(
+                    {
+                        "id": attachment.id,
+                        "name": attachment.filename,
+                        "content_type": attachment.content_type,
+                        "size": attachment.size,
+                        "url": url,
+                    }
+                )
+                media_urls.append(url)
+
+        try:
+            integ = Integration.objects.get(organization=org, provider="whatsapp", is_active=True)
+            token_plain = decrypt_token(getattr(integ, "token", "") or getattr(integ, "token_encrypted", "") or "")
+            extra = getattr(integ, "extra", {}) if hasattr(integ, "extra") else {}
+            account_sid = (
+                extra.get("account_sid")
+                or extra.get("twilio_account_sid")
+                or extra.get("TWILIO_ACCOUNT_SID")
+                or extra.get("accountSid")
+            )
+            from_whatsapp = (
+                extra.get("from_whatsapp")
+                or extra.get("twilio_whatsapp_from")
+                or extra.get("TWILIO_WHATSAPP_FROM")
+                or extra.get("fromWhatsApp")
+            )
+            if not token_plain or not account_sid or not from_whatsapp:
+                return Response(
+                    {"detail": "WhatsApp is not configured for this organization. Missing token/account_sid/from number."},
+                    status=400,
+                )
+            sender = WhatsAppSender()
+            msg_record = WhatsAppMessage.objects.create(
+                organization=org,
+                contact=contact,
+                direction=WhatsAppMessage.DIR_OUTBOUND,
+                message_type=WhatsAppMessage.TYPE_TEXT if not media_urls else WhatsAppMessage.TYPE_DOCUMENT,
+                text=text,
+                attachments=attachments_payload,
+                status=WhatsAppMessage.STATUS_PENDING,
+            )
+            send_res = sender.send(
+                to=contact.phone_whatsapp,
+                body=text,
+                media_urls=media_urls if media_urls else None,
+                credentials={"token": token_plain, "extra": {"account_sid": account_sid, "from_whatsapp": from_whatsapp}},
+            )
+            if send_res.success:
+                msg_record.status = WhatsAppMessage.STATUS_SENT
+                msg_record.twilio_message_sid = send_res.provider_message_id or ""
+                msg_record.save(update_fields=["status", "twilio_message_sid"])
+                return Response(WhatsAppMessageSerializer(msg_record).data, status=201)
+            msg_record.status = WhatsAppMessage.STATUS_FAILED
+            msg_record.error_reason = send_res.error or "unknown error"
+            msg_record.save(update_fields=["status", "error_reason"])
+            return Response({"detail": f"WhatsApp send failed: {msg_record.error_reason}"}, status=502)
+        except Integration.DoesNotExist:
+            return Response({"detail": "WhatsApp is not configured for this organization."}, status=400)
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "WhatsApp send exception",
+                exc_info=True,
+                extra={"org": org.id, "contact": contact.id, "phone": contact.phone_whatsapp},
+            )
+            return Response({"detail": f"WhatsApp send error: {exc}"}, status=500)
+
+
+class TwilioWhatsAppWebhook(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        raw_from = (request.data.get("From") or "").strip()
+        raw_to = (request.data.get("To") or "").strip()
+        from_number = raw_from.replace("whatsapp:", "").strip()
+        to_number = raw_to.replace("whatsapp:", "").strip()
+        body = request.data.get("Body") or ""
+        message_sid = request.data.get("MessageSid") or ""
+
+        if not from_number or not to_number:
+            return Response({"detail": "missing from/to"}, status=400)
+
+        # Resolve org by matching integration from_whatsapp (normalize without whatsapp: prefix)
+        from_candidates = [to_number, to_number.replace("whatsapp:", ""), raw_to]
+        integ = (
+            Integration.objects.filter(provider="whatsapp", is_active=True, extra__from_whatsapp__in=from_candidates).first()
+            or Integration.objects.filter(provider="whatsapp", is_active=True, extra__twilio_whatsapp_from__in=from_candidates).first()
+        )
+        if not integ:
+            logger.warning("Twilio WhatsApp webhook: integration not found for To=%s", to_number)
+            return Response({"detail": "integration not found"}, status=200)
+        org = integ.organization
+        contact = Contact.objects.filter(organization=org, phone_whatsapp=from_number).first()
+        if not contact:
+            logger.warning("Twilio WhatsApp webhook: contact not found for from=%s org=%s", from_number, org.id)
+            return Response({"detail": "contact not found"}, status=200)
+
+        attachments = []
+        num_media = int(request.data.get("NumMedia") or 0)
+        message_type = WhatsAppMessage.TYPE_TEXT
+        for idx in range(num_media):
+            media_url = request.data.get(f"MediaUrl{idx}")
+            content_type = request.data.get(f"MediaContentType{idx}")
+            attachments.append({"url": media_url, "content_type": content_type})
+            if content_type and content_type.startswith("image/"):
+                message_type = WhatsAppMessage.TYPE_IMAGE
+            else:
+                message_type = WhatsAppMessage.TYPE_DOCUMENT
+
+        WhatsAppMessage.objects.create(
+            organization=org,
+            contact=contact,
+            direction=WhatsAppMessage.DIR_INBOUND,
+            message_type=message_type,
+            text=body,
+            attachments=attachments,
+            twilio_message_sid=message_sid,
+            status=WhatsAppMessage.STATUS_RECEIVED,
+        )
+        return Response({"status": "ok"})
+
+
+class TwilioWhatsAppStatusWebhook(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        """
+        Twilio status callback for outbound WhatsApp messages.
+        Expects MessageSid + MessageStatus from Twilio.
+        """
+        sid = request.data.get("MessageSid") or request.data.get("MessageSid".lower())
+        status = (request.data.get("MessageStatus") or "").lower()
+        error_code = request.data.get("ErrorCode") or request.data.get("ErrorCode".lower())
+        error_message = request.data.get("ErrorMessage") or request.data.get("ErrorMessage".lower())
+
+        if not sid:
+            return Response({"detail": "missing MessageSid"}, status=400)
+
+        status_map = {
+            "sent": WhatsAppMessage.STATUS_SENT,
+            "delivered": WhatsAppMessage.STATUS_DELIVERED,
+            "failed": WhatsAppMessage.STATUS_FAILED,
+            "undelivered": WhatsAppMessage.STATUS_FAILED,
+            "queued": WhatsAppMessage.STATUS_PENDING,
+        }
+        mapped_status = status_map.get(status, None)
+
+        msg = WhatsAppMessage.objects.filter(twilio_message_sid=sid).first()
+        if not msg:
+            logger.warning("Twilio status webhook: message not found for sid=%s status=%s", sid, status)
+            return Response({"detail": "not found"}, status=200)
+
+        updates = {}
+        if mapped_status:
+            updates["status"] = mapped_status
+        if error_code or error_message:
+            updates["error_reason"] = f"{error_code or ''} {error_message or ''}".strip()
+        if updates:
+            for k, v in updates.items():
+                setattr(msg, k, v)
+            msg.save(update_fields=list(updates.keys()))
+
+        return Response({"status": "ok"})

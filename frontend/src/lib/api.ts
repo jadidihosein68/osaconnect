@@ -15,6 +15,7 @@ export interface Contact {
   full_name: string;
   email?: string;
   phone_whatsapp?: string;
+  whatsapp_blocked?: boolean;
   telegram_chat_id?: string;
   telegram_status?: string;
   telegram_invited?: boolean;
@@ -41,6 +42,21 @@ export interface TelegramMessage {
   attachments: any[];
   telegram_message_id?: string;
   status?: string;
+  created_at: string;
+}
+
+export interface WhatsAppMessage {
+  id: number;
+  contact: number;
+  contact_name?: string;
+  contact_phone?: string;
+  direction: string;
+  message_type: string;
+  text: string;
+  attachments: any[];
+  twilio_message_sid?: string;
+  status?: string;
+  error_reason?: string;
   created_at: string;
 }
 
@@ -320,6 +336,19 @@ export async function sendTelegramMessage(
   payload: { text?: string; attachment_id?: number; attachment_ids?: number[] },
 ): Promise<TelegramMessage | TelegramMessage[]> {
   const { data } = await api.post(`/telegram/messages/`, { contact_id: contactId, ...payload });
+  return data;
+}
+
+export async function fetchWhatsAppMessages(contactId: number): Promise<WhatsAppMessage[]> {
+  const { data } = await api.get(`/whatsapp/messages/?contact_id=${contactId}`);
+  return data;
+}
+
+export async function sendWhatsAppMessage(
+  contactId: number,
+  payload: { text?: string; attachment_ids?: number[] },
+): Promise<WhatsAppMessage> {
+  const { data } = await api.post(`/whatsapp/messages/`, { contact_id: contactId, ...payload });
   return data;
 }
 

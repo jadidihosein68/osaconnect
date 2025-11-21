@@ -50,6 +50,9 @@ class Contact(models.Model):
     organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE, related_name="contacts")
     full_name = models.CharField(max_length=255)
     phone_whatsapp = models.CharField(max_length=32, blank=True, null=True, unique=True)
+    whatsapp_blocked = models.BooleanField(default=False)
+    whatsapp_opt_in = models.BooleanField(default=False)
+    whatsapp_blocked = models.BooleanField(default=False)
     email = models.EmailField(blank=True, null=True, unique=True)
     telegram_chat_id = models.CharField(max_length=64, blank=True, null=True, unique=True)
     TELEGRAM_STATUS_NOT_LINKED = "not_linked"

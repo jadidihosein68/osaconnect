@@ -18,7 +18,9 @@ import {
   fetchTelegramMessages,
   sendTelegramMessage,
   TelegramMessage,
-  uploadTelegramAttachment,
+  fetchWhatsAppMessages,
+  sendWhatsAppMessage,
+  WhatsAppMessage,
 } from '../../lib/api';
 import { EditorState, Modifier, convertToRaw, ContentState, convertFromHTML } from 'draft-js';
 import draftToHtml from 'draftjs-to-html';
@@ -31,16 +33,18 @@ if (typeof draftGlobals.global === 'undefined') draftGlobals.global = globalThis
 if (typeof draftGlobals.process === 'undefined') draftGlobals.process = { env: { NODE_ENV: import.meta.env.MODE || 'development' } };
 
 export function SendMessage() {
-  const [channel, setChannel] = useState<'email' | 'telegram'>('email');
+  const [channel, setChannel] = useState<'email' | 'telegram' | 'whatsapp'>('email');
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [groups, setGroups] = useState<ContactGroup[]>([]);
   const [selectedContactIds, setSelectedContactIds] = useState<number[]>([]);
   const [selectedTelegramContactId, setSelectedTelegramContactId] = useState<number | null>(null);
+  const [selectedWhatsAppContactId, setSelectedWhatsAppContactId] = useState<number | null>(null);
   const [selectedGroupIds, setSelectedGroupIds] = useState<number[]>([]);
   const [recipientSearch, setRecipientSearch] = useState('');
   const [subject, setSubject] = useState('');
   const [emailBody, setEmailBody] = useState('<p></p>');
   const [telegramText, setTelegramText] = useState('');
+  const [whatsappText, setWhatsAppText] = useState('');
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [loading, setLoading] = useState(false);
@@ -50,11 +54,15 @@ export function SendMessage() {
   const [lastJobBatch, setLastJobBatch] = useState<any | null>(null);
   const [attachments, setAttachments] = useState<{ id: number; name: string; size: number; type: string }[]>([]);
   const [telegramAttachments, setTelegramAttachments] = useState<{ id: number; name: string; size: number; type: string }[]>([]);
+  const [whatsappAttachments, setWhatsAppAttachments] = useState<{ id: number; name: string; size: number; type: string }[]>([]);
   const [htmlMode, setHtmlMode] = useState(false);
   const [editorState, setEditorState] = useState(() => EditorState.createEmpty());
   const [telegramMessages, setTelegramMessages] = useState<TelegramMessage[]>([]);
   const [telegramLoading, setTelegramLoading] = useState(false);
   const [telegramError, setTelegramError] = useState<string | null>(null);
+  const [whatsappMessages, setWhatsAppMessages] = useState<WhatsAppMessage[]>([]);
+  const [whatsappLoading, setWhatsAppLoading] = useState(false);
+  const [whatsappError, setWhatsAppError] = useState<string | null>(null);
   const convoRef = useRef<HTMLDivElement | null>(null);
   const scrollAnchorRef = useRef<HTMLDivElement | null>(null);
 
@@ -111,9 +119,39 @@ export function SendMessage() {
     };
   }, [channel, selectedTelegramContactId]);
 
+  // Poll WhatsApp messages
+  useEffect(() => {
+    let timer: any;
+    const poll = async () => {
+      if (channel !== 'whatsapp' || !selectedWhatsAppContactId) return;
+      setWhatsAppLoading(true);
+      setWhatsAppError(null);
+      try {
+        const msgs = await fetchWhatsAppMessages(selectedWhatsAppContactId);
+        setWhatsAppMessages(msgs);
+      } catch {
+        setWhatsAppError('Failed to load conversation.');
+      } finally {
+        setWhatsAppLoading(false);
+      }
+    };
+    poll();
+    if (channel === 'whatsapp' && selectedWhatsAppContactId) {
+      timer = setInterval(poll, 3000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [channel, selectedWhatsAppContactId]);
+
   const onboardedContacts = useMemo(
     () => contacts.filter((c) => c.telegram_status === 'onboarded' && c.telegram_chat_id),
     [contacts],
+  );
+  const whatsappEligible = useMemo(() => contacts.filter((c) => c.phone_whatsapp && !c.whatsapp_blocked), [contacts]);
+  const selectedWhatsAppContact = useMemo(
+    () => contacts.find((c) => c.id === selectedWhatsAppContactId) || null,
+    [contacts, selectedWhatsAppContactId],
   );
   const selectedTelegramContact = useMemo(
     () => contacts.find((c) => c.id === selectedTelegramContactId) || null,
@@ -127,6 +165,18 @@ export function SendMessage() {
       ),
     [onboardedContacts, recipientSearch],
   );
+  const filteredWhatsApp = useMemo(
+    () =>
+      whatsappEligible.filter((c) => {
+        const term = recipientSearch.toLowerCase();
+        return (
+          c.full_name.toLowerCase().includes(term) ||
+          (c.email || '').toLowerCase().includes(term) ||
+          (c.phone_whatsapp || '').toLowerCase().includes(term)
+        );
+      }),
+    [whatsappEligible, recipientSearch],
+  );
   useEffect(() => {
     if (channel !== 'telegram' || !selectedTelegramContactId) {
       setTelegramMessages([]);
@@ -134,17 +184,68 @@ export function SendMessage() {
     }
   }, [channel, selectedTelegramContactId]);
 
+  useEffect(() => {
+    if (channel !== 'whatsapp' || !selectedWhatsAppContactId) {
+      setWhatsAppMessages([]);
+      setWhatsAppError(null);
+    }
+  }, [channel, selectedWhatsAppContactId]);
+
   // Auto-scroll to latest message when the list updates
   useEffect(() => {
-    if (channel !== 'telegram') return;
+    if (channel !== 'telegram' && channel !== 'whatsapp') return;
     if (scrollAnchorRef.current) {
       scrollAnchorRef.current.scrollIntoView({ behavior: 'smooth' });
     } else if (convoRef.current) {
       convoRef.current.scrollTop = convoRef.current.scrollHeight;
     }
-  }, [telegramMessages, channel]);
+  }, [telegramMessages, whatsappMessages, channel]);
+
+  const activeContact = channel === 'telegram' ? selectedTelegramContact : channel === 'whatsapp' ? selectedWhatsAppContact : null;
+  const conversationMessages = channel === 'telegram' ? telegramMessages : channel === 'whatsapp' ? whatsappMessages : [];
+  const conversationLoading = channel === 'telegram' ? telegramLoading : channel === 'whatsapp' ? whatsappLoading : false;
+  const conversationError = channel === 'telegram' ? telegramError : channel === 'whatsapp' ? whatsappError : null;
 
   const handleSend = async () => {
+    if (channel === 'whatsapp') {
+      if (!selectedWhatsAppContactId) {
+        setError('Select a contact for WhatsApp.');
+        return;
+      }
+      const selectedContact = contacts.find((c) => c.id === selectedWhatsAppContactId);
+      if (!selectedContact || !selectedContact.phone_whatsapp) {
+        setError('Contact is missing WhatsApp number.');
+        return;
+      }
+      const textOnly = whatsappText.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, '').trim();
+      const text = textOnly || whatsappText.trim();
+      if (!text && whatsappAttachments.length === 0) {
+        setError('Message cannot be empty.');
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      setSuccess(null);
+      try {
+        const payload: any = { text: text || undefined };
+        if (whatsappAttachments.length > 0) {
+          payload.attachment_ids = whatsappAttachments.map((a) => a.id);
+        }
+        await sendWhatsAppMessage(selectedWhatsAppContactId, payload);
+        setSuccess('WhatsApp message sent.');
+        setWhatsAppText('');
+        setWhatsAppAttachments([]);
+        const msgs = await fetchWhatsAppMessages(selectedWhatsAppContactId);
+        setWhatsAppMessages(msgs);
+      } catch (e: any) {
+        const serverDetail = e?.response?.data?.detail;
+        setError(serverDetail || 'Failed to send WhatsApp message');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     if (channel === 'telegram') {
       if (!selectedTelegramContactId) {
         setError('Select a contact for Telegram.');
@@ -245,13 +346,16 @@ export function SendMessage() {
               <Select
                 value={channel}
                 onValueChange={(val) => {
-                  setChannel(val as 'email' | 'telegram');
+                  setChannel(val as 'email' | 'telegram' | 'whatsapp');
                   setSelectedContactIds([]);
                   setSelectedGroupIds([]);
                   setSelectedTelegramContactId(null);
+                  setSelectedWhatsAppContactId(null);
                   setEmailBody('<p></p>');
                   setTelegramText('');
                   setTelegramAttachments([]);
+                  setWhatsAppText('');
+                  setWhatsAppAttachments([]);
                 }}
               >
                 <SelectTrigger>
@@ -260,11 +364,12 @@ export function SendMessage() {
                 <SelectContent>
                   <SelectItem value="email">Email (SendGrid)</SelectItem>
                   <SelectItem value="telegram">Telegram</SelectItem>
+                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {channel === 'email' ? (
+            {channel === 'email' && (
               <>
                 <div className="space-y-2">
                   <Label>Recipients</Label>
@@ -469,7 +574,9 @@ export function SendMessage() {
                   )}
                 </div>
               </>
-            ) : (
+            )}
+
+            {channel === 'telegram' && (
               <>
                 <div className="space-y-2">
                   <Label>Search Contacts</Label>
@@ -503,6 +610,39 @@ export function SendMessage() {
                 <p className="text-sm text-gray-600">
                   Only contacts with Telegram onboarding completed (chat connected) appear here.
                 </p>
+              </>
+            )}
+
+            {channel === 'whatsapp' && (
+              <>
+                <div className="space-y-2">
+                  <Label>Search Contacts</Label>
+                  <Input
+                    placeholder="Search by name, email, or phone"
+                    value={recipientSearch}
+                    onChange={(e) => setRecipientSearch(e.target.value)}
+                  />
+                </div>
+                <div className="h-64 overflow-y-auto border rounded p-2 space-y-2 bg-white">
+                  {filteredWhatsApp.map((c) => {
+                    const selected = selectedWhatsAppContactId === c.id;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className={`w-full text-left px-3 py-2 rounded border ${selected ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-indigo-200 hover:bg-gray-50'}`}
+                        onClick={() => setSelectedWhatsAppContactId(c.id)}
+                      >
+                        <div className="font-medium text-sm text-gray-900">{c.full_name}</div>
+                        <div className="text-xs text-gray-600">{c.phone_whatsapp || '—'}</div>
+                      </button>
+                    );
+                  })}
+                  {filteredWhatsApp.length === 0 && (
+                    <div className="text-gray-500 text-sm">No contacts with WhatsApp available.</div>
+                  )}
+                </div>
+                <p className="text-sm text-gray-600">Only contacts with WhatsApp numbers appear here.</p>
               </>
             )}
           </CardContent>
@@ -553,26 +693,49 @@ export function SendMessage() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Active contact</div>
-                  <div className="text-lg font-semibold text-gray-900">{selectedTelegramContact?.full_name || 'Select a contact'}</div>
-                  {selectedTelegramContact?.email && <div className="text-xs text-gray-600">{selectedTelegramContact.email}</div>}
+                  <div className="text-lg font-semibold text-gray-900">{activeContact?.full_name || 'Select a contact'}</div>
+                  {activeContact?.email && <div className="text-xs text-gray-600">{activeContact.email}</div>}
+                  {channel === 'whatsapp' && activeContact?.phone_whatsapp && (
+                    <div className="text-xs text-gray-600">{activeContact.phone_whatsapp}</div>
+                  )}
                 </div>
                 <div className="w-60">
-                  <Select
-                    disabled={filteredOnboarded.length === 0}
-                    value={selectedTelegramContactId ? String(selectedTelegramContactId) : ''}
-                    onValueChange={(val) => setSelectedTelegramContactId(Number(val))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose contact" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {filteredOnboarded.map((c) => (
-                        <SelectItem key={c.id} value={String(c.id)}>
-                          {c.full_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {channel === 'telegram' && (
+                    <Select
+                      disabled={filteredOnboarded.length === 0}
+                      value={selectedTelegramContactId ? String(selectedTelegramContactId) : ''}
+                      onValueChange={(val) => setSelectedTelegramContactId(Number(val))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose contact" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {filteredOnboarded.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>
+                            {c.full_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {channel === 'whatsapp' && (
+                    <Select
+                      disabled={filteredWhatsApp.length === 0}
+                      value={selectedWhatsAppContactId ? String(selectedWhatsAppContactId) : ''}
+                      onValueChange={(val) => setSelectedWhatsAppContactId(Number(val))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose contact" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {filteredWhatsApp.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>
+                            {c.full_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               </div>
               <div
@@ -580,22 +743,22 @@ export function SendMessage() {
                 className="border rounded p-3 bg-gray-50 scroll-smooth custom-scrollbar"
                 style={{ maxHeight: 420, overflowY: 'auto', minHeight: 420 }}
               >
-                {!selectedTelegramContact && <div className="text-sm text-gray-500">Select a contact on the left to view the conversation.</div>}
-                {selectedTelegramContact && telegramLoading && <div className="text-sm text-gray-500">Loading conversation...</div>}
-                {selectedTelegramContact && telegramError && <div className="text-sm text-red-600">{telegramError}</div>}
-                {selectedTelegramContact && !telegramLoading && telegramMessages.length === 0 && <div className="text-sm text-gray-500">No messages yet.</div>}
-                {selectedTelegramContact &&
-                  telegramMessages.map((m) => {
+                {!activeContact && <div className="text-sm text-gray-500">Select a contact on the left to view the conversation.</div>}
+                {activeContact && conversationLoading && <div className="text-sm text-gray-500">Loading conversation...</div>}
+                {activeContact && conversationError && <div className="text-sm text-red-600">{conversationError}</div>}
+                {activeContact && !conversationLoading && conversationMessages.length === 0 && <div className="text-sm text-gray-500">No messages yet.</div>}
+                {activeContact &&
+                  conversationMessages.map((m: any) => {
                     const isOutbound = m.direction === 'OUTBOUND';
                     const hasAttachment = m.attachments && m.attachments.length > 0;
                     const att = hasAttachment ? m.attachments[0] : null;
                     const isImage = att?.content_type?.startsWith?.('image/');
-                    const statusText = m.status && m.status !== 'sent' ? m.status : '';
+                    const statusText = m.status && m.status.toLowerCase() !== 'sent' ? m.status : '';
                     return (
                       <div key={m.id} className={`mb-3 flex ${isOutbound ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-md px-3 py-2 rounded-lg shadow-sm ${isOutbound ? 'bg-indigo-600 text-white' : 'bg-white text-gray-900 border'}`}>
                           <div className="flex items-center gap-2 text-xs opacity-80 mb-1">
-                            <span>{isOutbound ? 'Bot' : selectedTelegramContact.full_name || 'User'}</span>
+                            <span>{isOutbound ? 'You' : activeContact.full_name || 'User'}</span>
                             {statusText && <span className={`px-2 py-0.5 rounded-full ${isOutbound ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-700'}`}>{statusText}</span>}
                           </div>
                           <div className="text-sm whitespace-pre-wrap">{m.text || (hasAttachment ? '' : '—')}</div>
@@ -624,14 +787,14 @@ export function SendMessage() {
                   })}
                 <div ref={scrollAnchorRef} />
               </div>
-                <div className="space-y-2">
-                  <Label>New message</Label>
+              <div className="space-y-2">
+                <Label>New message</Label>
                 <Textarea
                   placeholder="Write a message..."
-                  value={telegramText}
-                  onChange={(e) => setTelegramText(e.target.value)}
+                  value={channel === 'telegram' ? telegramText : whatsappText}
+                  onChange={(e) => (channel === 'telegram' ? setTelegramText(e.target.value) : setWhatsAppText(e.target.value))}
                   rows={4}
-                  disabled={!selectedTelegramContactId}
+                  disabled={channel === 'telegram' ? !selectedTelegramContactId : !selectedWhatsAppContactId}
                 />
                 <div className="space-y-2">
                   <Label>Attachments (optional)</Label>
@@ -642,12 +805,17 @@ export function SendMessage() {
                       const files = Array.from(e.target.files || []);
                       for (const file of files) {
                         if (file.size > 20 * 1024 * 1024) {
-                          setError('File too large for Telegram (max 20MB).');
+                          setError('File too large (max 20MB).');
                           continue;
                         }
                         try {
-                          const uploaded = await uploadTelegramAttachment(file);
-                          setTelegramAttachments((prev) => [...prev, { id: uploaded.id, name: uploaded.filename, size: uploaded.size, type: uploaded.content_type }]);
+                          // reuse email attachment endpoint for storage
+                          const uploaded = await uploadEmailAttachment(file);
+                          if (channel === 'telegram') {
+                            setTelegramAttachments((prev) => [...prev, { id: uploaded.id, name: uploaded.filename, size: uploaded.size, type: uploaded.content_type }]);
+                          } else {
+                            setWhatsAppAttachments((prev) => [...prev, { id: uploaded.id, name: uploaded.filename, size: uploaded.size, type: uploaded.content_type }]);
+                          }
                           setError(null);
                         } catch (err: any) {
                           setError(err?.response?.data?.file?.[0] || 'Attachment upload failed');
@@ -656,15 +824,19 @@ export function SendMessage() {
                       if (e.target) e.target.value = '';
                     }}
                     className="border rounded p-2"
-                    disabled={!selectedTelegramContactId}
+                    disabled={channel === 'telegram' ? !selectedTelegramContactId : !selectedWhatsAppContactId}
                   />
                   <div className="flex flex-wrap gap-2">
-                    {telegramAttachments.map((a) => (
+                    {(channel === 'telegram' ? telegramAttachments : whatsappAttachments).map((a) => (
                       <span key={a.id} className="px-2 py-1 text-xs rounded-full border bg-gray-50">
                         {a.name} ({Math.round(a.size / 1024)} KB)
                         <button
                           className="ml-2 text-red-500"
-                          onClick={() => setTelegramAttachments((prev) => prev.filter((att) => att.id !== a.id))}
+                          onClick={() =>
+                            channel === 'telegram'
+                              ? setTelegramAttachments((prev) => prev.filter((att) => att.id !== a.id))
+                              : setWhatsAppAttachments((prev) => prev.filter((att) => att.id !== a.id))
+                          }
                           type="button"
                         >
                           ×
@@ -673,7 +845,12 @@ export function SendMessage() {
                     ))}
                   </div>
                 </div>
-                <Button onClick={handleSend} disabled={loading || !selectedTelegramContactId}>
+                <Button
+                  onClick={handleSend}
+                  disabled={
+                    loading || (channel === 'telegram' ? !selectedTelegramContactId : channel === 'whatsapp' ? !selectedWhatsAppContactId : false)
+                  }
+                >
                   <Send className="w-4 h-4 mr-2" />
                   {loading ? 'Sending...' : 'Send'}
                 </Button>

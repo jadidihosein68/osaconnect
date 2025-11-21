@@ -1,0 +1,43 @@
+
+
+Telegram : 
+For a new user to onboard the telegram bot we need to do the following. 
+
+to set webhook for your bot you need to run the following request : 
+
+https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=<BAECKEND_END_POINT>/api/webhooks/telegram/onboard/
+
+
+
+Whast app : 
+to setup a web hook for whats app please go to 
+Sand box and setup the when a message comes in  to the URL of our backend, 
+
+![alt text](image.png)
+
+
+https://<Backedn_URL>/api/webhooks/twilio/whatsapp/
+
+consider we have the following backend : 
+Backedn_URL : suzann-inexpugnable-laylah.ngrok-free.dev
+
+in twillo The URL will be : 
+
+https://suzann-inexpugnable-laylah.ngrok-free.dev/api/webhooks/twilio/whatsapp/
+
+
+
+for call back URL please use the following URL : 
+
+https://<Backedn_URL>/api/callbacks/twilio/whatsapp/status/
+
+which will be : 
+
+https://suzann-inexpugnable-laylah.ngrok-free.dev/api/callbacks/twilio/whatsapp/status/
+
+
+
+
+
+
+

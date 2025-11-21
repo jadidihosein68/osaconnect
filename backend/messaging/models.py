@@ -250,6 +250,54 @@ class TelegramMessage(models.Model):
         indexes = [models.Index(fields=["organization", "contact", "chat_id", "created_at"], name="tgmsg_org_contact_idx")]
 
 
+class WhatsAppMessage(models.Model):
+    DIR_INBOUND = "INBOUND"
+    DIR_OUTBOUND = "OUTBOUND"
+    DIR_CHOICES = [(DIR_INBOUND, "Inbound"), (DIR_OUTBOUND, "Outbound")]
+
+    TYPE_TEXT = "TEXT"
+    TYPE_IMAGE = "IMAGE"
+    TYPE_DOCUMENT = "DOCUMENT"
+    TYPE_AUDIO = "AUDIO"
+    TYPE_VIDEO = "VIDEO"
+    TYPE_OTHER = "OTHER"
+    TYPE_CHOICES = [
+        (TYPE_TEXT, "Text"),
+        (TYPE_IMAGE, "Image"),
+        (TYPE_DOCUMENT, "Document"),
+        (TYPE_AUDIO, "Audio"),
+        (TYPE_VIDEO, "Video"),
+        (TYPE_OTHER, "Other"),
+    ]
+
+    STATUS_PENDING = "PENDING"
+    STATUS_SENT = "SENT"
+    STATUS_DELIVERED = "DELIVERED"
+    STATUS_FAILED = "FAILED"
+    STATUS_RECEIVED = "RECEIVED"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_SENT, "Sent"),
+        (STATUS_DELIVERED, "Delivered"),
+        (STATUS_FAILED, "Failed"),
+        (STATUS_RECEIVED, "Received"),
+    ]
+
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="whatsapp_messages")
+    contact = models.ForeignKey(Contact, on_delete=models.CASCADE, related_name="whatsapp_messages")
+    direction = models.CharField(max_length=16, choices=DIR_CHOICES)
+    message_type = models.CharField(max_length=16, choices=TYPE_CHOICES, default=TYPE_TEXT)
+    text = models.TextField(blank=True, default="")
+    attachments = models.JSONField(default=list, blank=True)
+    twilio_message_sid = models.CharField(max_length=128, blank=True, default="")
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    error_reason = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["organization", "contact", "created_at"], name="wa_msg_org_contact_idx")]
+
+
 class TelegramInviteToken(models.Model):
     STATUS_PENDING = "PENDING"
     STATUS_USED = "USED"

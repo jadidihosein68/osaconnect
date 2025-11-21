@@ -6,7 +6,7 @@ from contacts.models import Contact
 from contacts.serializers import ContactSerializer
 from templates_app.models import MessageTemplate
 from templates_app.serializers import MessageTemplateSerializer
-from .models import InboundMessage, OutboundMessage, EmailJob, EmailRecipient, EmailAttachment, TelegramInviteToken, TelegramMessage
+from .models import InboundMessage, OutboundMessage, EmailJob, EmailRecipient, EmailAttachment, TelegramInviteToken, TelegramMessage, WhatsAppMessage
 from urllib.parse import urlparse
 import logging
 from organizations.utils import get_current_org
@@ -319,3 +319,26 @@ class TelegramMessageSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["id", "chat_id", "direction", "message_type", "telegram_message_id", "status", "created_at"]
+
+
+class WhatsAppMessageSerializer(serializers.ModelSerializer):
+    contact_name = serializers.CharField(source="contact.full_name", read_only=True)
+    contact_phone = serializers.CharField(source="contact.phone_whatsapp", read_only=True)
+
+    class Meta:
+        model = WhatsAppMessage
+        fields = [
+            "id",
+            "contact",
+            "contact_name",
+            "contact_phone",
+            "direction",
+            "message_type",
+            "text",
+            "attachments",
+            "twilio_message_sid",
+            "status",
+            "error_reason",
+            "created_at",
+        ]
+        read_only_fields = ["id", "direction", "message_type", "twilio_message_sid", "status", "error_reason", "created_at"]

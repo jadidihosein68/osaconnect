@@ -23,7 +23,14 @@ class ChannelSender(Protocol):
 
 
 class WhatsAppSender:
-    def send(self, *, to: str, body: str, media_url: str | None = None, credentials: dict | None = None) -> SendResult:
+    def send(
+        self,
+        *,
+        to: str,
+        body: str,
+        media_urls: list[str] | None = None,
+        credentials: dict | None = None,
+    ) -> SendResult:
         credentials = credentials or {}
         token = credentials.get("token")
         extra = credentials.get("extra") or {}
@@ -39,6 +46,7 @@ class WhatsAppSender:
                 from_=f"whatsapp:{from_whatsapp}",
                 to=f"whatsapp:{to}",
                 body=body,
+                media_url=media_urls or None,
             )
             return SendResult(success=True, provider_message_id=msg.sid)
         except Exception as exc:
