@@ -65,14 +65,15 @@ export function CampaignList() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-gray-900 mb-1">Campaigns</h1>
-        <p className="text-gray-600 text-sm">Review recent campaigns and their performance.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-gray-900 mb-2">Campaigns</h1>
+          <p className="text-gray-600 ">Review recent campaigns and their performance.</p>
+        </div>
+        <Button className="bg-gray-900 text-white hover:bg-gray-800" onClick={() => (window.location.href = '/messaging/campaign/create')}>
+          + Create Campaign
+        </Button>
       </div>
-
-      <Button className="w-full bg-gray-900 text-white hover:bg-gray-800" onClick={() => (window.location.href = '/messaging/campaign/create')}>
-        Create Campaign
-      </Button>
 
       <Card>
         <CardContent className="space-y-3 pt-6">
