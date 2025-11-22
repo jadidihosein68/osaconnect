@@ -338,6 +338,62 @@ class InstagramMessage(models.Model):
         indexes = [models.Index(fields=["organization", "contact", "created_at"], name="ig_msg_org_contact_idx")]
 
 
+class Campaign(models.Model):
+    STATUS_DRAFT = "draft"
+    STATUS_QUEUED = "queued"
+    STATUS_SENDING = "sending"
+    STATUS_COMPLETED = "completed"
+    STATUS_FAILED = "failed"
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, "Draft"),
+        (STATUS_QUEUED, "Queued"),
+        (STATUS_SENDING, "Sending"),
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_FAILED, "Failed"),
+    ]
+
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="campaigns")
+    name = models.CharField(max_length=100)
+    channel = models.CharField(max_length=32)
+    template = models.ForeignKey(MessageTemplate, on_delete=models.SET_NULL, null=True, blank=True)
+    target_count = models.PositiveIntegerField(default=0)
+    sent_count = models.PositiveIntegerField(default=0)
+    delivered_count = models.PositiveIntegerField(default=0)
+    read_count = models.PositiveIntegerField(default=0)
+    failed_count = models.PositiveIntegerField(default=0)
+    unsubscribed_count = models.PositiveIntegerField(default=0)
+    estimated_cost = models.DecimalField(max_digits=10, decimal_places=4, default=0)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class CampaignRecipient(models.Model):
+    STATUS_QUEUED = "queued"
+    STATUS_SENT = "sent"
+    STATUS_DELIVERED = "delivered"
+    STATUS_READ = "read"
+    STATUS_FAILED = "failed"
+    STATUS_UNSUBSCRIBED = "unsubscribed"
+    STATUS_CHOICES = [
+        (STATUS_QUEUED, "Queued"),
+        (STATUS_SENT, "Sent"),
+        (STATUS_DELIVERED, "Delivered"),
+        (STATUS_READ, "Read"),
+        (STATUS_FAILED, "Failed"),
+        (STATUS_UNSUBSCRIBED, "Unsubscribed"),
+    ]
+
+    campaign = models.ForeignKey(Campaign, on_delete=models.CASCADE, related_name="recipients")
+    contact = models.ForeignKey(Contact, on_delete=models.CASCADE, related_name="campaign_recipients")
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_QUEUED)
+    provider_message_id = models.CharField(max_length=128, blank=True, default="")
+    error_message = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 class TelegramInviteToken(models.Model):
     STATUS_PENDING = "PENDING"
     STATUS_USED = "USED"

@@ -10,7 +10,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from assistant.views import AssistantView
 from bookings.views import BookingViewSet
 from contacts.views import ContactViewSet, ContactGroupViewSet
-from messaging.views import InboundMessageViewSet, OutboundMessageViewSet, EmailJobViewSet, EmailAttachmentViewSet, unsubscribe, TelegramOnboardingViewSet, TelegramOnboardWebhook, TelegramMessageViewSet, WhatsAppMessageViewSet, TwilioWhatsAppWebhook, TwilioWhatsAppStatusWebhook, InstagramMessageViewSet, InstagramWebhook
+from messaging.views import InboundMessageViewSet, OutboundMessageViewSet, EmailJobViewSet, EmailAttachmentViewSet, unsubscribe, TelegramOnboardingViewSet, TelegramOnboardWebhook, TelegramMessageViewSet, WhatsAppMessageViewSet, TwilioWhatsAppWebhook, TwilioWhatsAppStatusWebhook, InstagramMessageViewSet, InstagramWebhook, CampaignViewSet
 from monitoring.views import HealthcheckView, MetricsView, MonitoringSummaryView, SettingsView, MonitoringDetailView, MonitoringEventsView, MonitoringAlertsView
 from organizations.views import MembershipViewSet
 from templates_app.views import MessageTemplateViewSet
@@ -36,6 +36,7 @@ router.register(r"telegram/onboarding", TelegramOnboardingViewSet, basename="tel
 router.register(r"telegram/messages", TelegramMessageViewSet, basename="telegram-messages")
 router.register(r"whatsapp/messages", WhatsAppMessageViewSet, basename="whatsapp-messages")
 router.register(r"instagram/messages", InstagramMessageViewSet, basename="instagram-messages")
+router.register(r"campaigns", CampaignViewSet, basename="campaigns")
 
 urlpatterns = [
     path("admin/", admin.site.urls),

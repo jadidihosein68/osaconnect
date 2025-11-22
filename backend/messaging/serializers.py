@@ -6,7 +6,7 @@ from contacts.models import Contact
 from contacts.serializers import ContactSerializer
 from templates_app.models import MessageTemplate
 from templates_app.serializers import MessageTemplateSerializer
-from .models import InboundMessage, OutboundMessage, EmailJob, EmailRecipient, EmailAttachment, TelegramInviteToken, TelegramMessage, WhatsAppMessage, InstagramMessage
+from .models import InboundMessage, OutboundMessage, EmailJob, EmailRecipient, EmailAttachment, TelegramInviteToken, TelegramMessage, WhatsAppMessage, InstagramMessage, Campaign, CampaignRecipient
 from urllib.parse import urlparse
 import logging
 from organizations.utils import get_current_org
@@ -363,3 +363,49 @@ class InstagramMessageSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["id", "direction", "message_type", "provider_message_id", "status", "error_reason", "created_at"]
+
+
+class CampaignRecipientSerializer(serializers.ModelSerializer):
+    contact_name = serializers.CharField(source="contact.full_name", read_only=True)
+
+    class Meta:
+        model = CampaignRecipient
+        fields = ["id", "contact", "contact_name", "status", "provider_message_id", "error_message", "created_at"]
+        read_only_fields = ["id", "status", "provider_message_id", "error_message", "created_at"]
+
+
+class CampaignSerializer(serializers.ModelSerializer):
+    recipients = CampaignRecipientSerializer(many=True, read_only=True)
+    template_name = serializers.CharField(source="template.name", read_only=True)
+
+    class Meta:
+        model = Campaign
+        fields = [
+            "id",
+            "name",
+            "channel",
+            "template",
+            "template_name",
+            "target_count",
+            "sent_count",
+            "delivered_count",
+            "read_count",
+            "failed_count",
+            "unsubscribed_count",
+            "estimated_cost",
+            "status",
+            "created_at",
+            "recipients",
+        ]
+        read_only_fields = [
+            "target_count",
+            "sent_count",
+            "delivered_count",
+            "read_count",
+            "failed_count",
+            "unsubscribed_count",
+            "estimated_cost",
+            "status",
+            "created_at",
+            "recipients",
+        ]

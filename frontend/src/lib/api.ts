@@ -60,6 +60,31 @@ export interface WhatsAppMessage {
   created_at: string;
 }
 
+export interface Campaign {
+  id: number;
+  name: string;
+  channel: string;
+  template: number | null;
+  template_name?: string;
+  target_count: number;
+  sent_count: number;
+  delivered_count: number;
+  read_count: number;
+  failed_count: number;
+  unsubscribed_count: number;
+  estimated_cost: number;
+  status: string;
+  created_at: string;
+}
+
+export interface CampaignCreatePayload {
+  name: string;
+  channel: string;
+  template_id?: number;
+  group_ids?: number[];
+  upload_contacts?: Array<{ name?: string; email?: string; phone?: string }>;
+}
+
 export interface ContactGroup {
   id: number;
   name: string;
@@ -359,6 +384,21 @@ export async function fetchInstagramMessages(contactId: number): Promise<Instagr
 
 export async function sendInstagramMessage(contactId: number, payload: { text: string }): Promise<InstagramMessage> {
   const { data } = await api.post(`/instagram/messages/`, { contact_id: contactId, ...payload });
+  return data;
+}
+
+export async function fetchCampaigns(): Promise<Campaign[]> {
+  const { data } = await api.get("/campaigns/");
+  return data;
+}
+
+export async function createCampaign(payload: CampaignCreatePayload): Promise<Campaign> {
+  const { data } = await api.post("/campaigns/", payload);
+  return data;
+}
+
+export async function fetchCampaignThrottle(): Promise<{ default_limit: number; per_channel: Record<string, number> }> {
+  const { data } = await api.get("/campaigns/throttle/");
   return data;
 }
 

@@ -10,8 +10,8 @@ import logging
 from organizations.utils import get_current_org
 from organizations.permissions import IsOrgMemberWithRole
 
-from .models import InboundMessage, OutboundMessage, EmailJob, EmailAttachment, EmailRecipient, TelegramInviteToken, TelegramMessage, WhatsAppMessage, InstagramMessage
-from .serializers import InboundMessageSerializer, OutboundMessageSerializer, EmailJobSerializer, EmailJobCreateSerializer, EmailRecipientSerializer, TelegramInviteTokenSerializer, TelegramMessageSerializer, WhatsAppMessageSerializer, InstagramMessageSerializer
+from .models import InboundMessage, OutboundMessage, EmailJob, EmailAttachment, EmailRecipient, TelegramInviteToken, TelegramMessage, WhatsAppMessage, InstagramMessage, Campaign, CampaignRecipient
+from .serializers import InboundMessageSerializer, OutboundMessageSerializer, EmailJobSerializer, EmailJobCreateSerializer, EmailRecipientSerializer, TelegramInviteTokenSerializer, TelegramMessageSerializer, WhatsAppMessageSerializer, InstagramMessageSerializer, CampaignSerializer
 from .serializers_extra import EmailAttachmentSerializer
 from .tasks import process_email_job
 from .models import Suppression
@@ -19,7 +19,8 @@ from django.utils import timezone
 import secrets
 from messaging.channels import EmailSender, TelegramSender, WhatsAppSender
 from messaging.utils import build_media_url_from_request
-from contacts.models import Contact
+from contacts.models import Contact, ContactGroup
+from templates_app.models import MessageTemplate
 from django.conf import settings
 from contacts.serializers import ContactSerializer
 from integrations.models import Integration
@@ -820,3 +821,145 @@ class InstagramWebhook(APIView):
     def get(self, request, *args, **kwargs):
         # Basic verification endpoint if needed
         return Response({"status": "ok"})
+
+
+class CampaignViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
+    permission_classes = [IsOrgMemberWithRole]
+    serializer_class = CampaignSerializer
+
+    def get_queryset(self):
+        org = get_current_org(self.request)
+        return Campaign.objects.filter(organization=org).select_related("template")
+
+    @action(detail=False, methods=["get"])
+    def throttle(self, request):
+        per_channel = getattr(settings, "CHANNEL_THROTTLE_PER_MIN", {})
+        default_limit = getattr(settings, "OUTBOUND_PER_MINUTE_LIMIT", 60)
+        return Response(
+            {
+                "default_limit": default_limit,
+                "per_channel": {
+                    "email": per_channel.get("email", default_limit),
+                    "whatsapp": per_channel.get("whatsapp", default_limit),
+                    "telegram": per_channel.get("telegram", default_limit),
+                    "instagram": per_channel.get("instagram", default_limit),
+                },
+            }
+        )
+
+    def create(self, request, *args, **kwargs):
+        org = get_current_org(request)
+        name = (request.data.get("name") or "").strip()
+        channel = request.data.get("channel")
+        template_id = request.data.get("template_id")
+        group_ids = request.data.get("group_ids") or []
+        upload_contacts = request.data.get("upload_contacts") or []
+        if not name:
+            return Response({"detail": "Campaign name is required"}, status=400)
+        if len(name) > 100:
+            return Response({"detail": "Campaign name too long"}, status=400)
+        if channel not in ["email", "whatsapp", "telegram", "instagram"]:
+            return Response({"detail": "Channel is required"}, status=400)
+
+        template = None
+        if template_id:
+            template = MessageTemplate.objects.filter(id=template_id, channel=channel, organization=org).first()
+            if not template:
+                return Response({"detail": "Template not found for this channel"}, status=404)
+
+        contacts_qs = Contact.objects.filter(organization=org)
+        eligible = []
+
+        if group_ids:
+            if isinstance(group_ids, str):
+                try:
+                    group_ids = [int(group_ids)]
+                except Exception:
+                    group_ids = []
+            contacts_qs = contacts_qs.filter(groups__id__in=group_ids)
+
+        if upload_contacts:
+            # simple normalization: expect list of dicts with name/email/phone
+            for entry in upload_contacts:
+                email = (entry.get("email") or "").lower().strip()
+                phone = (entry.get("phone") or entry.get("phone_whatsapp") or "").strip()
+                full_name = entry.get("name") or "Uploaded Contact"
+                contact = None
+                if email:
+                    contact = contacts_qs.filter(email=email).first()
+                if not contact and phone:
+                    contact = contacts_qs.filter(phone_whatsapp=phone).first()
+                if not contact:
+                    contact = Contact.objects.create(
+                        organization=org,
+                        full_name=full_name,
+                        email=email or None,
+                        phone_whatsapp=phone or None,
+                    )
+                eligible.append(contact)
+        else:
+            eligible = list(contacts_qs)
+
+        # channel eligibility filter
+        filtered = []
+        for c in eligible:
+            if c.status in [Contact.STATUS_UNSUBSCRIBED, Contact.STATUS_BOUNCED, Contact.STATUS_BLOCKED]:
+                continue
+            if channel == "email":
+                if c.email:
+                    filtered.append(c)
+            elif channel == "whatsapp":
+                if c.phone_whatsapp and not c.whatsapp_blocked:
+                    filtered.append(c)
+            elif channel == "telegram":
+                if c.telegram_status == Contact.TELEGRAM_STATUS_ONBOARDED and c.telegram_chat_id:
+                    filtered.append(c)
+            elif channel == "instagram":
+                if getattr(c, "instagram_opt_in", False) and getattr(c, "instagram_user_id", None) and not getattr(c, "instagram_blocked", False):
+                    filtered.append(c)
+
+        filtered = list({c.id: c for c in filtered}.values())  # dedupe
+        target_count = len(filtered)
+        if target_count == 0:
+            return Response({"detail": "No eligible contacts found for this channel"}, status=400)
+
+        # estimate cost
+        if channel == "email":
+            estimated_cost = target_count * 0.001
+        elif channel == "whatsapp":
+            estimated_cost = target_count * 0.005 * 1.25
+        else:
+            estimated_cost = 0
+
+        campaign = Campaign.objects.create(
+            organization=org,
+            name=name,
+            channel=channel,
+            template=template,
+            target_count=target_count,
+            estimated_cost=estimated_cost,
+            status=Campaign.STATUS_QUEUED,
+        )
+        CampaignRecipient.objects.bulk_create(
+            [CampaignRecipient(campaign=campaign, contact=c) for c in filtered]
+        )
+
+        # If email campaign, kick off an EmailJob using the same template/contacts
+        if channel == "email" and template:
+            subject = template.subject or campaign.name
+            job = EmailJob.objects.create(
+                organization=org,
+                template=template,
+                subject=subject,
+                body_html=template.body or "",
+                body_text=template.body or "",
+                status=EmailJob.STATUS_QUEUED,
+            )
+            EmailRecipient.objects.bulk_create(
+                [EmailRecipient(job=job, contact=c, email=c.email or "", status=EmailRecipient.STATUS_QUEUED) for c in filtered if c.email]
+            )
+            process_email_job.delay(job.id)
+
+        data = CampaignSerializer(campaign).data
+        data["throttle_per_minute"] = getattr(settings, "OUTBOUND_PER_MINUTE_LIMIT", 60)
+        return Response(data, status=201)

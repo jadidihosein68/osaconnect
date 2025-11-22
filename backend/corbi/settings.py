@@ -126,6 +126,12 @@ CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "true").lower()
 
 # Messaging throttling (per channel)
 OUTBOUND_PER_MINUTE_LIMIT = int(os.getenv("OUTBOUND_PER_MINUTE_LIMIT", 60))
+CHANNEL_THROTTLE_PER_MIN = {
+    "email": int(os.getenv("THROTTLE_EMAIL_PER_MIN", OUTBOUND_PER_MINUTE_LIMIT)),
+    "whatsapp": int(os.getenv("THROTTLE_WHATSAPP_PER_MIN", OUTBOUND_PER_MINUTE_LIMIT)),
+    "telegram": int(os.getenv("THROTTLE_TELEGRAM_PER_MIN", OUTBOUND_PER_MINUTE_LIMIT)),
+    "instagram": int(os.getenv("THROTTLE_INSTAGRAM_PER_MIN", OUTBOUND_PER_MINUTE_LIMIT)),
+}
 
 ###############################################################################
 # AI Assistant
