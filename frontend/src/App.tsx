@@ -6,6 +6,7 @@ import { ContactsList } from './components/contacts/ContactsList';
 import { ContactDetail } from './components/contacts/ContactDetail';
 import { SendMessage } from './components/messaging/SendMessage';
 import { Campaign } from './components/messaging/Campaign';
+import { CampaignList } from './components/messaging/CampaignList';
 import { InboundLogs } from './components/inbound/InboundLogs';
 import { InboundDetail } from './components/inbound/InboundDetail';
 import { TemplateList } from './components/templates/TemplateList';
@@ -222,7 +223,8 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
         <Route path="/outbound-logs/email" element={<EmailLogs />} />
         <Route path="/outbound-logs/email/:id" element={<EmailJobDetail />} />
         <Route path="/contacts/telegram-onboarding" element={<TelegramOnboarding />} />
-        <Route path="/messaging/campaign" element={<Campaign />} />
+        <Route path="/messaging/campaign" element={<CampaignList />} />
+        <Route path="/messaging/campaign/create" element={<Campaign />} />
         <Route path="/inbound" element={<InboundLogs onViewDetail={(id) => navigate(`/inbound/${id}`)} />} />
         <Route path="/inbound/:id" element={<InboundDetailPage />} />
         <Route path="/bookings" element={<BookingList onViewBooking={(id) => navigate(`/bookings/${id}`)} onCreateBooking={() => navigate('/bookings/new')} />} />

@@ -939,6 +939,9 @@ class CampaignViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.C
             target_count=target_count,
             estimated_cost=estimated_cost,
             status=Campaign.STATUS_QUEUED,
+            created_by=request.user if request.user.is_authenticated else None,
+            group_ids=group_ids,
+            upload_used=bool(upload_rows),
         )
         CampaignRecipient.objects.bulk_create(
             [CampaignRecipient(campaign=campaign, contact=c) for c in filtered]

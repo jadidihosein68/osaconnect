@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from rest_framework import serializers
+from django.conf import settings
 
 from contacts.models import Contact
 from contacts.serializers import ContactSerializer
@@ -377,6 +378,10 @@ class CampaignRecipientSerializer(serializers.ModelSerializer):
 class CampaignSerializer(serializers.ModelSerializer):
     recipients = CampaignRecipientSerializer(many=True, read_only=True)
     template_name = serializers.CharField(source="template.name", read_only=True)
+    throttle_per_minute = serializers.SerializerMethodField()
+    group_ids = serializers.JSONField(read_only=True)
+    upload_used = serializers.BooleanField(read_only=True)
+    created_by_name = serializers.CharField(source="created_by.username", read_only=True)
 
     class Meta:
         model = Campaign
@@ -386,6 +391,10 @@ class CampaignSerializer(serializers.ModelSerializer):
             "channel",
             "template",
             "template_name",
+            "created_by",
+            "created_by_name",
+            "group_ids",
+            "upload_used",
             "target_count",
             "sent_count",
             "delivered_count",
@@ -395,6 +404,7 @@ class CampaignSerializer(serializers.ModelSerializer):
             "estimated_cost",
             "status",
             "created_at",
+            "throttle_per_minute",
             "recipients",
         ]
         read_only_fields = [
@@ -408,4 +418,14 @@ class CampaignSerializer(serializers.ModelSerializer):
             "status",
             "created_at",
             "recipients",
+            "group_ids",
+            "upload_used",
+            "created_by",
+            "created_by_name",
+            "throttle_per_minute",
         ]
+
+    def get_throttle_per_minute(self, obj):
+        per_channel = getattr(settings, "CHANNEL_THROTTLE_PER_MIN", {})
+        default_limit = getattr(settings, "OUTBOUND_PER_MINUTE_LIMIT", 60)
+        return per_channel.get(obj.channel, default_limit)

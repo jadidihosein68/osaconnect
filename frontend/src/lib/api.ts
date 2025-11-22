@@ -66,6 +66,10 @@ export interface Campaign {
   channel: string;
   template: number | null;
   template_name?: string;
+  created_by?: number | null;
+  created_by_name?: string;
+  group_ids?: number[];
+  upload_used?: boolean;
   target_count: number;
   sent_count: number;
   delivered_count: number;
@@ -75,6 +79,7 @@ export interface Campaign {
   estimated_cost: number;
   status: string;
   created_at: string;
+  throttle_per_minute?: number;
 }
 
 export interface CampaignCreatePayload {
