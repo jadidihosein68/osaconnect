@@ -22,6 +22,7 @@ import { GroupsPage } from './components/contacts/GroupsPage';
 import { EmailLogs } from './components/messaging/EmailLogs';
 import { EmailJobDetail } from './components/messaging/EmailJobDetail';
 import { TelegramOnboarding } from './components/messaging/TelegramOnboarding';
+import { CampaignDetail } from './components/messaging/CampaignDetail';
 import { Layout } from './components/Layout';
 import { fetchMemberships, setAuth, setOrg, Membership } from './lib/api';
 
@@ -225,6 +226,7 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
         <Route path="/contacts/telegram-onboarding" element={<TelegramOnboarding />} />
         <Route path="/messaging/campaign" element={<CampaignList />} />
         <Route path="/messaging/campaign/create" element={<Campaign />} />
+        <Route path="/messaging/campaign/:id" element={<CampaignDetail />} />
         <Route path="/inbound" element={<InboundLogs onViewDetail={(id) => navigate(`/inbound/${id}`)} />} />
         <Route path="/inbound/:id" element={<InboundDetailPage />} />
         <Route path="/bookings" element={<BookingList onViewBooking={(id) => navigate(`/bookings/${id}`)} onCreateBooking={() => navigate('/bookings/new')} />} />

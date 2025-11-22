@@ -3,8 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Badge } from '../ui/badge';
 import { Campaign, fetchCampaigns } from '../../lib/api';
-import { Users, Send, Mail, MessageSquare } from 'lucide-react';
+import { Users, Send, Mail, MessageSquare, Search, Target } from 'lucide-react';
 
 const channelIcon = (ch: string) => {
   if (ch === 'email') return <Mail className="w-4 h-4 text-blue-600" />;
@@ -57,50 +58,57 @@ export function CampaignList() {
       <div className="p-6 space-y-4 text-center">
         <div className="text-xl text-gray-900">No campaigns yet</div>
         <div className="text-gray-600">Create your first campaign to start messaging at scale.</div>
-        <Button onClick={() => (window.location.href = '/messaging/campaign')}>Create Campaign</Button>
+        <Button onClick={() => (window.location.href = '/messaging/campaign/create')}>Create Campaign</Button>
       </div>
     );
   }
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <div>
-          <h1 className="text-gray-900 mb-1">Campaigns</h1>
-          <p className="text-gray-600 text-sm">Review recent campaigns and their performance.</p>
-        </div>
-        <Button onClick={() => (window.location.href = '/messaging/campaign/create')}>Create Campaign</Button>
+      <div>
+        <h1 className="text-gray-900 mb-1">Campaigns</h1>
+        <p className="text-gray-600 text-sm">Review recent campaigns and their performance.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <div className="md:col-span-2">
-          <Input placeholder="Search campaigns" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
-        <Select value={channelFilter} onValueChange={setChannelFilter}>
-          <SelectTrigger>
-            <SelectValue placeholder="Channel" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Channels</SelectItem>
-            <SelectItem value="email">Email</SelectItem>
-            <SelectItem value="whatsapp">WhatsApp</SelectItem>
-            <SelectItem value="telegram">Telegram</SelectItem>
-            <SelectItem value="instagram">Instagram</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger>
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="queued">Queued</SelectItem>
-            <SelectItem value="sending">Sending</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="failed">Failed</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <Button className="w-full bg-gray-900 text-white hover:bg-gray-800" onClick={() => (window.location.href = '/messaging/campaign/create')}>
+        Create Campaign
+      </Button>
+
+      <Card>
+        <CardContent className="space-y-3 pt-6">
+          <div className="flex items-center gap-2">
+            <Search className="w-4 h-4 text-gray-500" />
+            <Input placeholder="Search campaigns" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Select value={channelFilter} onValueChange={setChannelFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Channel" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Channels</SelectItem>
+                <SelectItem value="email">Email (SendGrid)</SelectItem>
+                <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                <SelectItem value="telegram">Telegram</SelectItem>
+                <SelectItem value="instagram">Instagram</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="queued">Queued</SelectItem>
+                <SelectItem value="sending">Sending</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="failed">Failed</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {filtered.map((c) => {
@@ -108,33 +116,51 @@ export function CampaignList() {
           const pct = target ? Math.round((c.sent_count / target) * 100) : 0;
           const deliveredPct = target ? Math.round((c.delivered_count / target) * 100) : 0;
           const failedPct = target ? Math.round((c.failed_count / target) * 100) : 0;
+          const cost = typeof c.estimated_cost === 'number' ? c.estimated_cost : Number(c.estimated_cost || 0);
           return (
-            <Card key={c.id} className="h-full flex flex-col">
-              <CardHeader className="flex flex-row items-center justify-between gap-2">
-                <div>
-                  <CardTitle className="text-base text-gray-900">{c.name}</CardTitle>
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    {channelIcon(c.channel)}
-                    <span>{c.channel === 'email' ? 'Email (SendGrid)' : c.channel.charAt(0).toUpperCase() + c.channel.slice(1)}</span>
+            <Card key={c.id} className="h-full flex flex-col hover:shadow-lg transition-shadow">
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="space-y-1">
+                    <CardTitle className="text-base text-gray-900">{c.name}</CardTitle>
+                    <div className="flex items-center gap-2 flex-wrap text-sm text-gray-600">
+                      {channelIcon(c.channel)}
+                      <Badge variant="secondary" className="text-xs">
+                        {c.channel === 'email' ? 'Email (SendGrid)' : c.channel.charAt(0).toUpperCase() + c.channel.slice(1)}
+                      </Badge>
+                    </div>
+                  </div>
+                  <Badge className={statusClass(c.status)}>{c.status}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="flex-1 space-y-4 text-sm">
+                <div className="flex items-center gap-2 text-gray-700">
+                  <Target className="w-4 h-4" /> {target || 0} targets
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 bg-blue-50 rounded  border-blue-100 text-blue-800">
+                    <div className="font-medium">Sent</div>
+                    <div>{c.sent_count} ({pct}%)</div>
+                  </div>
+                  <div className="p-3 bg-green-50 rounded  border-green-100 text-green-800">
+                    <div className="font-medium">Delivered</div>
+                    <div>{c.delivered_count} ({deliveredPct}%)</div>
+                  </div>
+                  <div className="p-3 bg-orange-50 rounded  border-orange-100 text-orange-800">
+                    <div className="font-medium">Read/Open</div>
+                    <div>{c.read_count}</div>
+                  </div>
+                  <div className="p-3 bg-red-50 rounded  border-red-100 text-red-800">
+                    <div className="font-medium">Failed</div>
+                    <div>{c.failed_count} ({failedPct}%)</div>
                   </div>
                 </div>
-                <span className={`text-xs px-2 py-1 rounded-full ${statusClass(c.status)}`}>{c.status}</span>
-              </CardHeader>
-              <CardContent className="flex-1 space-y-3 text-sm">
-                <div className="text-gray-600 flex items-center gap-2">
-                  <Users className="w-4 h-4" /> {target} targets
+                <div className="flex justify-between text-xs text-gray-700 pt-3 border-t ">
+                  
+                  <span className="text-gray-500">Unsubscribed: {c.unsubscribed_count}</span>
+                  <span className="text-gray-500">Cost: ${cost.toFixed ? cost.toFixed(4) : Number(cost || 0).toFixed(4)}</span>
+                
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="p-2 bg-green-50 rounded border border-green-100 text-green-800">Sent: {c.sent_count} ({pct}%)</div>
-                  <div className="p-2 bg-blue-50 rounded border border-blue-100 text-blue-800">Delivered: {c.delivered_count} ({deliveredPct}%)</div>
-                  <div className="p-2 bg-gray-50 rounded border border-gray-200 text-gray-800">Read/Open: {c.read_count}</div>
-                  <div className="p-2 bg-red-50 rounded border border-red-100 text-red-800">Failed: {c.failed_count} ({failedPct}%)</div>
-                  <div className="p-2 bg-red-50 rounded border border-red-100 text-red-800">Unsub: {c.unsubscribed_count}</div>
-                  <div className="p-2 bg-gray-50 rounded border border-gray-200 text-gray-800">Cost: ${c.estimated_cost?.toFixed ? c.estimated_cost.toFixed(3) : c.estimated_cost}</div>
-                </div>
-                {c.throttle_per_minute && (
-                  <div className="text-xs text-gray-600">Throttle: {c.throttle_per_minute} msgs/min</div>
-                )}
                 <Button variant="outline" size="sm" className="w-full" onClick={() => (window.location.href = `/messaging/campaign/${c.id}`)}>
                   View Details
                 </Button>

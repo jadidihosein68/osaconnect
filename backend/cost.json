@@ -1,0 +1,69 @@
+{
+  "default_currency": "USD",
+  "channels": {
+    "email": {
+      "currency": "USD",
+      "pricing": {
+        "inbound": {
+          "unit": "per_message",
+          "amount": { "actual": 0.0, "markup": 0.0 }
+        },
+        "outbound": {
+          "unit": "per_message",
+          "amount": { "actual": 0.0005, "markup": 0.000625 }
+        },
+        "template": null
+      }
+    },
+    "whatsapp": {
+      "currency": "USD",
+      "pricing": {
+        "inbound": {
+          "unit": "per_message",
+          "amount": { "actual": 0.005, "markup": 0.00625 }
+        },
+        "outbound": {
+          "unit": "per_message",
+          "amount": { "actual": 0.01, "markup": 0.0125 }
+        },
+        "template": {
+          "unit": "per_message",
+          "amount": { "actual": 0.03, "markup": 0.0375 },
+          "categories": {
+            "marketing": { "actual": 0.035, "markup": 0.04375 },
+            "utility": { "actual": 0.025, "markup": 0.03125 },
+            "authentication": { "actual": 0.02, "markup": 0.025 }
+          }
+        }
+      }
+    },
+    "instagram": {
+      "currency": "USD",
+      "pricing": {
+        "inbound": {
+          "unit": "per_message",
+          "amount": { "actual": 0.0, "markup": 0.0 }
+        },
+        "outbound": {
+          "unit": "per_message",
+          "amount": { "actual": 0.008, "markup": 0.01 }
+        },
+        "template": null
+      }
+    },
+    "telegram": {
+      "currency": "USD",
+      "pricing": {
+        "inbound": {
+          "unit": "per_message",
+          "amount": { "actual": 0.0, "markup": 0.0 }
+        },
+        "outbound": {
+          "unit": "per_message",
+          "amount": { "actual": 0.0, "markup": 0.0 }
+        },
+        "template": null
+      }
+    }
+  }
+}

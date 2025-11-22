@@ -5,7 +5,21 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Send, Users, DollarSign } from 'lucide-react';
-import { fetchContactGroups, fetchTemplates, fetchIntegrations, fetchCampaignThrottle, createCampaign, CampaignCreatePayload, ContactGroup, Template, Integration } from '../../lib/api';
+import {
+  fetchContactGroups,
+  fetchTemplates,
+  fetchIntegrations,
+  fetchCampaignThrottle,
+  fetchCampaignCosts,
+  fetchContacts,
+  createCampaign,
+  CampaignCreatePayload,
+  ContactGroup,
+  Template,
+  Integration,
+  Contact,
+  CampaignCostConfig,
+} from '../../lib/api';
 
 export function Campaign() {
   const [channel, setChannel] = useState('whatsapp');
@@ -22,19 +36,25 @@ export function Campaign() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [costs, setCosts] = useState<CampaignCostConfig | null>(null);
 
   useEffect(() => {
     const load = async () => {
       try {
-      const [grp, tpl, ints, throttle] = await Promise.all([
+      const [grp, tpl, ints, throttle, costConfig, contactList] = await Promise.all([
         fetchContactGroups(),
         fetchTemplates(),
         fetchIntegrations(),
         fetchCampaignThrottle(),
+        fetchCampaignCosts(),
+        fetchContacts(),
       ]);
         setGroups(grp);
         setTemplates(tpl);
         setIntegrations(ints);
+        setCosts(costConfig);
+        setContacts(contactList);
         // pick channel-specific limit if available
         const limit = throttle.per_channel?.[channel] || throttle.default_limit;
         setThrottleLimit(limit);
@@ -71,6 +91,48 @@ export function Campaign() {
       setChannel(availableChannels[0]);
     }
   }, [availableChannels]);
+
+  // Recalculate targets & cost when selection changes
+  useEffect(() => {
+    const keyField = (ch: string) => {
+      if (ch === 'email') return 'email';
+      if (ch === 'whatsapp') return 'phone_whatsapp';
+      if (ch === 'telegram') return 'telegram_chat_id';
+      if (ch === 'instagram') return 'instagram_scoped_id';
+      return 'id';
+    };
+    const field = keyField(channel);
+    const dedupe = new Set<string>();
+
+    // From groups
+    contacts.forEach((c) => {
+      if (groupIds.length === 0) return;
+      const membership = (c.groups || []) as any[];
+      const groupMatch = membership.some((g: any) => groupIds.includes(typeof g === 'number' ? g : g.id));
+      if (!groupMatch) return;
+      const keyVal: any = (c as any)[field];
+      if (!keyVal) return;
+      dedupe.add(String(keyVal));
+    });
+
+    // From upload rows
+    uploadRows.forEach((row) => {
+      const keyVal = channel === 'email' ? row.email : row.phone;
+      if (keyVal) dedupe.add(String(keyVal));
+    });
+
+    const count = dedupe.size;
+    setTargetCount(count);
+
+    const amt = costs?.channels?.[channel]?.pricing?.outbound?.amount;
+    let rate = 0;
+    if (typeof amt === 'number') {
+      rate = amt;
+    } else if (amt && typeof amt === 'object' && typeof amt.markup === 'number') {
+      rate = amt.markup;
+    }
+    setEstimatedCost(Number((count * rate).toFixed(4)));
+  }, [groupIds, uploadRows, channel, contacts, costs]);
 
   const handleUploadCsv = (file: File) => {
     const reader = new FileReader();

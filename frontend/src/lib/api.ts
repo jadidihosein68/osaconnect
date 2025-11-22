@@ -80,6 +80,21 @@ export interface Campaign {
   status: string;
   created_at: string;
   throttle_per_minute?: number;
+  recipients?: CampaignRecipient[];
+}
+
+export interface CampaignRecipient {
+  id: number;
+  contact_id: number;
+  contact_name?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  contact_instagram_user_id?: string;
+  status: string;
+  error_reason?: string | null;
+  sent_at?: string | null;
+  delivered_at?: string | null;
+  read_at?: string | null;
 }
 
 export interface CampaignCreatePayload {
@@ -88,6 +103,20 @@ export interface CampaignCreatePayload {
   template_id?: number;
   group_ids?: number[];
   upload_contacts?: Array<{ name?: string; email?: string; phone?: string }>;
+}
+
+export interface CampaignCostConfig {
+  default_currency: string;
+  channels: {
+    [key: string]: {
+      currency: string;
+      pricing: {
+        outbound: { unit: string; amount: { actual: number; markup: number } | number };
+        inbound?: { unit: string; amount: { actual: number; markup: number } | number };
+        template?: any;
+      };
+    };
+  };
 }
 
 export interface ContactGroup {
@@ -397,6 +426,11 @@ export async function fetchCampaigns(): Promise<Campaign[]> {
   return data;
 }
 
+export async function fetchCampaign(id: number): Promise<Campaign> {
+  const { data } = await api.get(`/campaigns/${id}/`);
+  return data;
+}
+
 export async function createCampaign(payload: CampaignCreatePayload): Promise<Campaign> {
   const { data } = await api.post("/campaigns/", payload);
   return data;
@@ -404,6 +438,11 @@ export async function createCampaign(payload: CampaignCreatePayload): Promise<Ca
 
 export async function fetchCampaignThrottle(): Promise<{ default_limit: number; per_channel: Record<string, number> }> {
   const { data } = await api.get("/campaigns/throttle/");
+  return data;
+}
+
+export async function fetchCampaignCosts(): Promise<CampaignCostConfig> {
+  const { data } = await api.get("/campaigns/costs/");
   return data;
 }
 

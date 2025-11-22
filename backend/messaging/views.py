@@ -7,6 +7,8 @@ from rest_framework.views import APIView
 from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
 from django.http import HttpResponse
 import logging
+import os
+import json
 from organizations.utils import get_current_org
 from organizations.permissions import IsOrgMemberWithRole
 
@@ -846,6 +848,18 @@ class CampaignViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.C
                 },
             }
         )
+
+    @action(detail=False, methods=["get"])
+    def costs(self, request):
+        """
+        Serve hard-coded channel pricing for campaign estimation.
+        """
+        cost_path = os.path.join(settings.BASE_DIR, "cost.json")
+        if not os.path.exists(cost_path):
+            return Response({"detail": "Cost file missing"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        with open(cost_path, "r") as fh:
+            data = json.load(fh)
+        return Response(data)
 
     def create(self, request, *args, **kwargs):
         org = get_current_org(request)
