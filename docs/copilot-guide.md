@@ -41,6 +41,7 @@ npm run dev  # http://localhost:5173 proxied to backend
 - Inbound log: `GET /api/inbound/` (read-only)
 - Inbound webhooks: `POST /api/webhooks/{channel}/` (channel=whatsapp|email/telegram/instagram; logs payload, enriches contact if matched)
 - Provider callbacks: `POST /api/callbacks/{channel}/` (provider status updates; marks suppressions on failure/bounce)
+- Campaigns: `GET/POST /api/campaigns/` (create/list), `GET /api/campaigns/{id}/` (detail incl. recipients), `GET /api/campaigns/throttle/` (per-channel send caps), `GET /api/campaigns/costs/` (hard-coded pricing with actual+markup; UI uses markup for estimation). Channels supported: email, whatsapp, telegram, instagram. Create payload accepts `group_ids` (multi) and `upload_contacts` (CSV rows) and dedupes contacts. Estimated cost = targets × channel outbound markup.
 - Bookings: `GET/POST /api/bookings/` (Google Calendar sync uses integration tokens; updates/cancels patch/delete events)
 - Assistant: `POST /api/assistant/` (KB-backed stub, requires auth/org)
 - Health: `/health/`; Metrics: `/api/metrics/` (counts, failures, retrying) – requires JWT + `X-Org-ID`
@@ -74,6 +75,7 @@ npm run dev  # http://localhost:5173 proxied to backend
 - Email attachments: `POST /api/email-attachments/` (multipart) uploads validated files (pdf/jpg/png/docx/xlsx/zip up to 10MB) and returns ids; include `attachment_ids` when creating email jobs. S3-like storage not configured; uses Django media. Job detail lists attachments with download links.
 - Email batching config via env: `EMAIL_BATCH_SIZE`, `EMAIL_BATCH_DELAY_SECONDS`, `EMAIL_MAX_RETRIES`, `EMAIL_RETRY_DELAY_SECONDS`. Shown in EmailJob detail; not editable via UI.
 - Metrics: aggregates counts/failures/retrying and today aggregates; monitoring summary provides today totals, success rate, inbound today.
+- Campaigns UI: `/messaging/campaign` list (cards, filters), `/messaging/campaign/create` (multi-group selection, CSV upload, template selection, channel chosen from active integrations). Campaign detail `/messaging/campaign/:id` shows summary and recipient statuses. Target count and cost recompute client-side from selected groups/uploads using `/campaigns/costs` markup rates. Channels displayed as “Email (SendGrid)”, WhatsApp, Telegram, Instagram.
 - Bookings: Google Calendar integration creates/updates/deletes events using stored OAuth token + calendar_id.
 - Assistant: now requires auth/org and returns KB snippets; replace with real LLM provider when ready.
 - Billing: `/api/billing/logs/` (list/create) and `/api/billing/logs/{id}/result/` (update status/tokens/cost). Records per-call AI usage with org scoping, feature_tag, model, tokens, raw_cost, billable_cost. Log a row on dispatch (`status=sent`), then update on success/fail/cancel. Filterable by feature_tag/model/status/date range.
