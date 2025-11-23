@@ -964,8 +964,10 @@ class CampaignViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.C
         # If email campaign, kick off an EmailJob using the same template/contacts
         if channel == "email" and template:
             subject = template.subject or campaign.name
+            recipients = [c for c in filtered if c.email]
             job = EmailJob.objects.create(
                 organization=org,
+                campaign=campaign,
                 template=template,
                 subject=subject,
                 body_html=template.body or "",
@@ -973,8 +975,13 @@ class CampaignViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.C
                 status=EmailJob.STATUS_QUEUED,
             )
             EmailRecipient.objects.bulk_create(
-                [EmailRecipient(job=job, contact=c, email=c.email or "", status=EmailRecipient.STATUS_QUEUED) for c in filtered if c.email]
+                [EmailRecipient(job=job, contact=c, email=c.email or "", status=EmailRecipient.STATUS_QUEUED) for c in recipients]
             )
+            job.total_recipients = len(recipients)
+            job.save(update_fields=["total_recipients", "updated_at"])
+            # reflect initial queued count on campaign for visibility
+            campaign.sent_count = len(recipients)
+            campaign.save(update_fields=["sent_count"])
             process_email_job.delay(job.id)
 
         data = CampaignSerializer(campaign).data

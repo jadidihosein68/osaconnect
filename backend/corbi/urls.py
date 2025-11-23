@@ -12,7 +12,7 @@ from bookings.views import BookingViewSet
 from contacts.views import ContactViewSet, ContactGroupViewSet
 from messaging.views import InboundMessageViewSet, OutboundMessageViewSet, EmailJobViewSet, EmailAttachmentViewSet, unsubscribe, TelegramOnboardingViewSet, TelegramOnboardWebhook, TelegramMessageViewSet, WhatsAppMessageViewSet, TwilioWhatsAppWebhook, TwilioWhatsAppStatusWebhook, InstagramMessageViewSet, InstagramWebhook, CampaignViewSet
 from monitoring.views import HealthcheckView, MetricsView, MonitoringSummaryView, SettingsView, MonitoringDetailView, MonitoringEventsView, MonitoringAlertsView
-from organizations.views import MembershipViewSet
+from organizations.views import MembershipViewSet, me
 from templates_app.views import MessageTemplateViewSet
 from messaging.webhooks import InboundWebhookView
 from messaging.callbacks import ProviderCallbackView, SendGridEventView
@@ -41,6 +41,7 @@ router.register(r"campaigns", CampaignViewSet, basename="campaigns")
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include(router.urls)),
+    path("api/auth/me/", me, name="auth-me"),
     path("api/webhooks/<str:channel>/", InboundWebhookView.as_view(), name="inbound_webhook"),
     path("api/callbacks/<str:channel>/", ProviderCallbackView.as_view(), name="provider_callback"),
     path("api/callbacks/sendgrid/", SendGridEventView.as_view(), name="sendgrid_events"),

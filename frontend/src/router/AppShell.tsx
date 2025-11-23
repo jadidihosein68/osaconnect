@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Route, Routes, useLocation, useNavigate, Navigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import App from "../App";
 import { setAuth, setOrg } from "../lib/api";
 
@@ -19,7 +19,8 @@ export default function AppShell() {
       setAuth(token);
       if (org) setOrg(Number(org));
     } else if (location.pathname !== "/login") {
-      navigate("/login", { replace: true });
+      const next = encodeURIComponent(location.pathname + location.search);
+      navigate(`/login?next=${next}`, { replace: true });
     }
     setReady(true);
   }, [location.pathname, navigate]);
@@ -40,17 +41,9 @@ export default function AppShell() {
   if (!ready) return null;
 
   return (
-    <Routes>
-      <Route
-        path="/*"
-        element={
-          <App
-            onAuthPersist={handleAuthPersist}
-            onOrgPersist={handleOrgPersist}
-          />
-        }
-      />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <App
+      onAuthPersist={handleAuthPersist}
+      onOrgPersist={handleOrgPersist}
+    />
   );
 }

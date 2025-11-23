@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate, useParams } from 'react-router-dom';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
@@ -24,7 +24,8 @@ import { EmailJobDetail } from './components/messaging/EmailJobDetail';
 import { TelegramOnboarding } from './components/messaging/TelegramOnboarding';
 import { CampaignDetail } from './components/messaging/CampaignDetail';
 import { Layout } from './components/Layout';
-import { fetchMemberships, setAuth, setOrg, Membership } from './lib/api';
+import { RequireAuth } from './components/RequireAuth';
+import { fetchMemberships, setAuth, setOrg, Membership, clearAuth } from './lib/api';
 
 interface AppProps {
   onAuthPersist?: (token: string, orgId?: number) => void;
@@ -41,6 +42,7 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const intendedPathRef = useRef<string | null>(null);
 
   const deriveUserFromMembership = (membership?: Membership) => {
     if (!membership || !membership.user) return { name: null as string | null, email: null as string | null };
@@ -52,7 +54,7 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
     };
   };
 
-  const handleLogin = async (token: string, username: string) => {
+  const handleLogin = async (token: string, username: string, nextPath?: string) => {
     setAuth(token);
     onAuthPersist?.(token);
     localStorage.setItem('corbi_token', token);
@@ -77,7 +79,17 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
         localStorage.setItem('corbi_org', String(selectedOrg));
       }
       setIsLoggedIn(true);
-      navigate('/', { replace: true });
+      const storedRedirect = sessionStorage.getItem('corbi_redirect');
+      const safeRedirect =
+        nextPath && nextPath.startsWith('/') && !nextPath.startsWith('//')
+          ? nextPath
+          : storedRedirect && storedRedirect.startsWith('/') && !storedRedirect.startsWith('//')
+            ? storedRedirect
+            : null;
+      const redirectTo = intendedPathRef.current || (location.state as any)?.from?.pathname || safeRedirect || '/';
+      if (safeRedirect) sessionStorage.removeItem('corbi_redirect');
+      intendedPathRef.current = null;
+      navigate(redirectTo, { replace: true });
     } finally {
       setLoadingMemberships(false);
     }
@@ -121,19 +133,28 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
             onOrgPersist?.(orgNum);
           }
         } catch {
+          clearAuth();
           setIsLoggedIn(false);
         } finally {
           setLoadingMemberships(false);
         }
+      } else {
+        clearAuth();
       }
       setReady(true);
     };
     hydrate();
   }, [onAuthPersist, onOrgPersist]);
 
-  if (!ready) return null;
+  if (!ready) return <div className="p-6 text-gray-600">Loading...</div>;
   if (!isLoggedIn && location.pathname !== '/login') {
-    return <Navigate to="/login" replace />;
+    // remember where user wanted to go
+    intendedPathRef.current = location.pathname + location.search;
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('corbi_redirect', location.pathname + location.search);
+    }
+    const next = encodeURIComponent(location.pathname + location.search);
+    return <Navigate to={`/login?next=${next}`} replace state={{ from: location }} />;
   }
 
   const handleContactSaved = (id: string) => {
@@ -174,10 +195,7 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
       onOrgChange={handleOrgChange}
           onNavigate={(screen) => navigate(screen)}
           onLogout={() => {
-            localStorage.removeItem('corbi_user');
-            localStorage.removeItem('corbi_email');
-            localStorage.removeItem('corbi_token');
-            localStorage.removeItem('corbi_refresh');
+            clearAuth();
             setUserEmail(null);
             setIsLoggedIn(false);
             navigate('/login', { replace: true });
@@ -185,58 +203,67 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
           userName={userName || userEmail || 'User'}
           userEmail={userEmail || undefined}
         >
-      <Routes>
+      <Routes future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Route path="/login" element={<Login onLogin={handleLogin} loading={loadingMemberships} memberships={memberships} />} />
-        <Route path="/" element={<Dashboard onNavigate={(path) => navigate(path)} orgId={orgId} isLoggedIn={isLoggedIn} />} />
         <Route
-          path="/contacts/all-contacts"
+          path="/*"
           element={
-            <ContactsList
-              onViewContact={(id) => navigate(`/contacts/${id}`)}
-              onCreateContact={() => navigate('/contacts/new')}
-            />
+            <RequireAuth isLoggedIn={isLoggedIn}>
+              <Routes future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                <Route path="/" element={<Dashboard onNavigate={(path) => navigate(path)} orgId={orgId} isLoggedIn={isLoggedIn} />} />
+                <Route
+                  path="/contacts/all-contacts"
+                  element={
+                    <ContactsList
+                      onViewContact={(id) => navigate(`/contacts/${id}`)}
+                      onCreateContact={() => navigate('/contacts/new')}
+                    />
+                  }
+                />
+                <Route
+                  path="/contacts/new"
+                  element={<ContactDetail contactId="new" onBack={() => navigate('/contacts/all-contacts')} onSaved={handleContactSaved} />}
+                />
+                <Route path="/contacts/:id" element={<ContactDetailPage />} />
+                <Route path="/contacts/groups" element={<GroupsPage />} />
+                <Route
+                  path="/templates"
+                  element={
+                    <TemplateList
+                      onCreateTemplate={() => navigate('/templates/new')}
+                      onEditTemplate={(id) => navigate(`/templates/${id}`)}
+                    />
+                  }
+                />
+                <Route
+                  path="/templates/new"
+                  element={<TemplateEditor templateId={null} onBack={() => navigate('/templates')} onSaved={() => navigate('/templates')} />}
+                />
+                <Route path="/templates/:id" element={<TemplateEditorWrapper onBack={() => navigate('/templates')} />} />
+                <Route path="/messaging/send" element={<SendMessage />} />
+                <Route path="/outbound-logs/email" element={<EmailLogs />} />
+                <Route path="/outbound-logs/email/:id" element={<EmailJobDetail />} />
+                <Route path="/contacts/telegram-onboarding" element={<TelegramOnboarding />} />
+                <Route path="/messaging/campaign" element={<CampaignList />} />
+                <Route path="/messaging/campaign/create" element={<Campaign />} />
+                <Route path="/messaging/campaign/:id" element={<CampaignDetail />} />
+                <Route path="/inbound" element={<InboundLogs onViewDetail={(id) => navigate(`/inbound/${id}`)} />} />
+                <Route path="/inbound/:id" element={<InboundDetailPage />} />
+                <Route
+                  path="/bookings"
+                  element={<BookingList onViewBooking={(id) => navigate(`/bookings/${id}`)} onCreateBooking={() => navigate('/bookings/new')} />}
+                />
+                <Route path="/bookings/:id" element={<BookingDetailPage />} />
+                <Route path="/assistant" element={<AIAssistant />} />
+                <Route path="/monitoring/outbound" element={<OutboundLogs />} />
+                <Route path="/monitoring" element={<MonitoringDashboard />} />
+                <Route path="/billing" element={<Billing />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </RequireAuth>
           }
         />
-        <Route
-          path="/contacts/new"
-          element={<ContactDetail contactId="new" onBack={() => navigate('/contacts/all-contacts')} onSaved={handleContactSaved} />}
-        />
-        <Route path="/contacts/:id" element={<ContactDetailPage />} />
-        <Route path="/contacts/groups" element={<GroupsPage />} />
-        <Route
-          path="/templates"
-          element={
-            <TemplateList
-              onCreateTemplate={() => navigate('/templates/new')}
-              onEditTemplate={(id) => navigate(`/templates/${id}`)}
-            />
-          }
-        />
-        <Route
-          path="/templates/new"
-          element={<TemplateEditor templateId={null} onBack={() => navigate('/templates')} onSaved={() => navigate('/templates')} />}
-        />
-        <Route
-          path="/templates/:id"
-          element={<TemplateEditorWrapper onBack={() => navigate('/templates')} />}
-        />
-        <Route path="/messaging/send" element={<SendMessage />} />
-        <Route path="/outbound-logs/email" element={<EmailLogs />} />
-        <Route path="/outbound-logs/email/:id" element={<EmailJobDetail />} />
-        <Route path="/contacts/telegram-onboarding" element={<TelegramOnboarding />} />
-        <Route path="/messaging/campaign" element={<CampaignList />} />
-        <Route path="/messaging/campaign/create" element={<Campaign />} />
-        <Route path="/messaging/campaign/:id" element={<CampaignDetail />} />
-        <Route path="/inbound" element={<InboundLogs onViewDetail={(id) => navigate(`/inbound/${id}`)} />} />
-        <Route path="/inbound/:id" element={<InboundDetailPage />} />
-        <Route path="/bookings" element={<BookingList onViewBooking={(id) => navigate(`/bookings/${id}`)} onCreateBooking={() => navigate('/bookings/new')} />} />
-        <Route path="/bookings/:id" element={<BookingDetailPage />} />
-        <Route path="/assistant" element={<AIAssistant />} />
-        <Route path="/monitoring/outbound" element={<OutboundLogs />} />
-        <Route path="/monitoring" element={<MonitoringDashboard />} />
-        <Route path="/billing" element={<Billing />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>
   );

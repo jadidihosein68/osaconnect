@@ -1,6 +1,6 @@
 
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
 import AppShell from "./router/AppShell";
 import "./index.css";
 
@@ -11,12 +11,15 @@ if (typeof globalThis !== "undefined") {
   if (typeof g.process === "undefined") g.process = { env: { NODE_ENV: "development" } };
 }
 
-createRoot(document.getElementById("root")!).render(
-  <BrowserRouter>
-    <Routes>
-      <Route path="/*" element={<AppShell />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-  </BrowserRouter>
+const router = createBrowserRouter(
+  [
+    { path: "/*", element: <AppShell /> },
+    { path: "*", element: <Navigate to="/" replace /> },
+  ],
+  {
+    future: { v7_startTransition: true, v7_relativeSplatPath: true },
+  }
 );
+
+createRoot(document.getElementById("root")!).render(<RouterProvider router={router} />);
   

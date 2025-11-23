@@ -51,6 +51,12 @@ export function CampaignDetail() {
   if (!campaign) return null;
 
   const recipients: CampaignRecipient[] = campaign.recipients || [];
+  const total = campaign.target_count || 0;
+  const delivered = campaign.delivered_count || 0;
+  const failed = campaign.failed_count || 0;
+  const read = campaign.read_count || 0;
+  const sent = campaign.sent_count || delivered;
+  const successPct = total ? Math.min(100, Math.round(((delivered + read) / total) * 100)) : 0;
 
   return (
     <div className="p-6 space-y-4">
@@ -62,12 +68,48 @@ export function CampaignDetail() {
       </div>
 
       <Card>
+        <CardHeader className="pb-0">
+          <CardTitle>Campaign Status</CardTitle>
+          <div className="text-sm text-gray-600">Overall progress and delivery health</div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between text-sm text-gray-700">
+            <span>{campaign.status === 'completed' ? 'Campaign Complete' : 'In Progress'}</span>
+            <span>{successPct}%</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="bg-gray-900 h-2 rounded-full" style={{ width: `${successPct}%` }} />
+          </div>
+          <div className="grid grid-cols-3 md:grid-cols-3 gap-3 text-sm">
+            <div className="p-3 rounded bg-green-50 border border-green-100">
+              <div className="text-green-700 font-semibold">Delivered</div>
+              <div className="text-green-800">{delivered} {total ? `(${Math.round((delivered / total) * 100)}%)` : ''}</div>
+            </div>
+            <div className="p-3 rounded bg-red-50 border border-red-100">
+              <div className="text-red-700 font-semibold">Failed</div>
+              <div className="text-red-800">{failed} {total ? `(${Math.round((failed / total) * 100)}%)` : ''}</div>
+            </div>
+            <div className="p-3 rounded bg-indigo-50 border border-indigo-100">
+              <div className="text-indigo-700 font-semibold">Total Targets</div>
+              <div className="text-indigo-800">{total}</div>
+            </div>
+          </div>
+          <div className="p-3 bg-gray-50 border border-gray-200 rounded text-sm text-gray-700">
+            Sent: {sent} · Delivered: {delivered} · Read/Open: {read} · Failed: {failed}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
           <div>
             <CardTitle className="text-lg">{campaign.name}</CardTitle>
             <div className="text-sm text-gray-600">{channelLabel(campaign.channel)}</div>
           </div>
-          <span className={`text-xs px-2 py-1 rounded-full ${statusClass(campaign.status)}`}>{campaign.status}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">Campaign Status:</span>
+            <span className={`text-xs px-2 py-1 rounded-full ${statusClass(campaign.status)}`}>{campaign.status}</span>
+          </div>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
           <div className="space-y-2">

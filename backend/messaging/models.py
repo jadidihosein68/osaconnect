@@ -124,6 +124,7 @@ class EmailJob(models.Model):
 
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="email_jobs")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    campaign = models.ForeignKey("messaging.Campaign", null=True, blank=True, on_delete=models.SET_NULL, related_name="email_jobs")
     template = models.ForeignKey("templates_app.MessageTemplate", null=True, blank=True, on_delete=models.SET_NULL)
     subject = models.CharField(max_length=255)
     body_html = models.TextField()
@@ -155,11 +156,13 @@ class EmailRecipient(models.Model):
     STATUS_SENT = "sent"
     STATUS_FAILED = "failed"
     STATUS_SKIPPED = "skipped"
+    STATUS_READ = "read"
     STATUS_CHOICES = [
         (STATUS_QUEUED, "Queued"),
         (STATUS_SENT, "Sent"),
         (STATUS_FAILED, "Failed"),
         (STATUS_SKIPPED, "Skipped"),
+        (STATUS_READ, "Read"),
     ]
 
     job = models.ForeignKey(EmailJob, on_delete=models.CASCADE, related_name="recipients")
@@ -168,6 +171,7 @@ class EmailRecipient(models.Model):
     full_name = models.CharField(max_length=255, blank=True, default="")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_QUEUED)
     error = models.TextField(blank=True, default="")
+    read_at = models.DateTimeField(null=True, blank=True)
     sent_at = models.DateTimeField(null=True, blank=True)
     retry_count = models.PositiveIntegerField(default=0)
     provider_message_id = models.CharField(max_length=128, blank=True, default="")

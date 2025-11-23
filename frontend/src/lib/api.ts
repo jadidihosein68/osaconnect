@@ -274,10 +274,25 @@ async function refreshAccessToken(): Promise<string> {
   return refreshPromise;
 }
 
+export function clearAuth() {
+  authToken = "";
+  refreshToken = "";
+  orgId = null;
+  localStorage.removeItem("corbi_token");
+  localStorage.removeItem("corbi_refresh");
+  localStorage.removeItem("corbi_org");
+  localStorage.removeItem("corbi_user");
+  localStorage.removeItem("corbi_email");
+  if (typeof window !== "undefined") {
+    sessionStorage.removeItem("corbi_redirect");
+  }
+}
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const status = error?.response?.status;
     const isExpired =
       error?.response?.status === 401 &&
       (error?.response?.data?.code === "token_not_valid" || /expired/i.test(error?.response?.data?.detail || ""));
@@ -292,9 +307,18 @@ api.interceptors.response.use(
           return api(originalRequest);
         }
       } catch (refreshErr) {
-        localStorage.removeItem("corbi_token");
-        localStorage.removeItem("corbi_refresh");
+        clearAuth();
+        const redirect = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/";
+        window.location.href = `/login?next=${encodeURIComponent(redirect)}`;
       }
+    }
+    if (status === 401) {
+      clearAuth();
+      if (typeof window !== "undefined") {
+        const redirect = window.location.pathname + window.location.search;
+        window.location.href = `/login?next=${encodeURIComponent(redirect)}`;
+      }
+      return Promise.reject(error);
     }
     return Promise.reject(error);
   },

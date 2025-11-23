@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -22,6 +23,7 @@ import {
 } from '../../lib/api';
 
 export function Campaign() {
+  const navigate = useNavigate();
   const [channel, setChannel] = useState('whatsapp');
   const [campaignName, setCampaignName] = useState('');
   const [groupIds, setGroupIds] = useState<number[]>([]);
@@ -187,6 +189,9 @@ export function Campaign() {
       setTargetCount(resp.target_count);
       setEstimatedCost(resp.estimated_cost);
       setStatusMessage('Campaign queued successfully.');
+      if (resp?.id) {
+        navigate(`/messaging/campaign/${resp.id}`);
+      }
     } catch (e: any) {
       const msg = e?.response?.status === 401 ? 'Unauthorized. Please log in again.' : e?.response?.data?.detail || 'Failed to create campaign';
       setEstimatedCost(0);

@@ -112,6 +112,17 @@ REST_FRAMEWORK = {
     ],
 }
 
+# SimpleJWT lifetimes (extend access to reduce frequent logouts; refresh for 14 days)
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=14),
+    "ROTATE_REFRESH_TOKENS": False,
+    "BLACKLIST_AFTER_ROTATION": False,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
 ###############################################################################
 # Cross-cutting config
 ###############################################################################

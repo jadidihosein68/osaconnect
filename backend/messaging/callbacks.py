@@ -4,11 +4,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils import timezone
 
-from .models import OutboundMessage, Suppression, ProviderEvent
+from .models import OutboundMessage, Suppression, ProviderEvent, EmailRecipient, EmailJob, Campaign
 from monitoring.utils import record_alert
 from monitoring.models import MonitoringAlert
-from .models import EmailRecipient, EmailJob
-from django.db import transaction
+from django.db import transaction, models
 
 
 class ProviderCallbackView(APIView):
@@ -106,6 +105,8 @@ class SendGridEventView(APIView):
                         job.failed_count += 1
                         job.status = EmailJob.STATUS_FAILED
                         job.save(update_fields=["failed_count", "status", "updated_at"])
+                        if job.campaign:
+                            Campaign.objects.filter(id=job.campaign_id).update(failed_count=models.F("failed_count") + 1)
                         failed += 1
                         identifier = rec.email
                         Suppression.objects.get_or_create(
@@ -117,7 +118,16 @@ class SendGridEventView(APIView):
                     elif event_type in ["delivered"]:
                         rec.status = EmailRecipient.STATUS_SENT
                         rec.save(update_fields=["status", "updated_at"])
+                        if job.campaign:
+                            Campaign.objects.filter(id=job.campaign_id).update(delivered_count=models.F("delivered_count") + 1)
                         updated += 1
+                    elif event_type in ["open"]:
+                        if rec.status != EmailRecipient.STATUS_READ:
+                            rec.status = EmailRecipient.STATUS_READ
+                            rec.read_at = timezone.now()
+                            rec.save(update_fields=["status", "read_at", "updated_at"])
+                            if job.campaign:
+                                Campaign.objects.filter(id=job.campaign_id).update(read_count=models.F("read_count") + 1)
             except EmailRecipient.DoesNotExist:
                 continue
         return Response({"status": "ok", "failed_updated": failed, "updated": updated})

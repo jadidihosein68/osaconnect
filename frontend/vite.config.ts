@@ -70,5 +70,9 @@
         changeOrigin: true,
       },
     },
+    headers: {
+      // Dev-only CSP to allow React tooling; adjust/remove for production reverse proxy
+      'Content-Security-Policy': "script-src 'self' 'unsafe-eval' 'unsafe-inline' data: blob:;",
+    },
   },
 });

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -6,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { login } from '../lib/api';
 
 interface LoginProps {
-  onLogin: (token: string, username: string) => void;
+  onLogin: (token: string, username: string, nextPath?: string) => void;
   loading?: boolean;
   memberships?: any[];
 }
@@ -16,6 +17,16 @@ export function Login({ onLogin }: LoginProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const location = useLocation();
+
+  const next = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const candidate = params.get('next') || '';
+    if (candidate && candidate.startsWith('/') && !candidate.startsWith('//') && !/^https?:/i.test(candidate)) {
+      return candidate;
+    }
+    return null;
+  }, [location.search]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,7 +34,7 @@ export function Login({ onLogin }: LoginProps) {
     setIsSubmitting(true);
     try {
       const data = await login(username, password);
-      onLogin(data.access, username);
+      onLogin(data.access, username, next || undefined);
     } catch (err) {
       setError('Invalid credentials');
     } finally {
@@ -84,6 +95,20 @@ export function Login({ onLogin }: LoginProps) {
             <Button type="submit" className="w-full" disabled={isSubmitting}>
               {isSubmitting ? 'Signing in...' : 'Login'}
             </Button>
+            <div className="flex gap-2 mt-2">
+              <Button type="button" variant="outline" className="w-1/2" onClick={() => {
+                const target = next ? encodeURIComponent(next) : '';
+                window.location.href = `/auth/microsoft/start${next ? `?next=${target}` : ''}`;
+              }}>
+                Continue with Microsoft
+              </Button>
+              <Button type="button" variant="outline" className="w-1/2" onClick={() => {
+                const target = next ? encodeURIComponent(next) : '';
+                window.location.href = `/auth/google/start${next ? `?next=${target}` : ''}`;
+              }}>
+                Continue with Google
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>
