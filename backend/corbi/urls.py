@@ -40,11 +40,12 @@ router.register(r"campaigns", CampaignViewSet, basename="campaigns")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    # Specific callbacks before the catch-all
+    path("api/callbacks/sendgrid/", SendGridEventView.as_view(), name="sendgrid_events"),
     path("api/", include(router.urls)),
     path("api/auth/me/", me, name="auth-me"),
     path("api/webhooks/<str:channel>/", InboundWebhookView.as_view(), name="inbound_webhook"),
     path("api/callbacks/<str:channel>/", ProviderCallbackView.as_view(), name="provider_callback"),
-    path("api/callbacks/sendgrid/", SendGridEventView.as_view(), name="sendgrid_events"),
     path("api/webhooks/twilio/whatsapp/", TwilioWhatsAppWebhook.as_view(), name="twilio_whatsapp_webhook"),
     path("api/callbacks/twilio/whatsapp/status/", TwilioWhatsAppStatusWebhook.as_view(), name="twilio_whatsapp_status"),
     path("api/webhooks/telegram/onboard/", TelegramOnboardWebhook.as_view(), name="telegram_onboard_webhook"),

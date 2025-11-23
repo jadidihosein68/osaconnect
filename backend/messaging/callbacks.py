@@ -2,12 +2,20 @@ from __future__ import annotations
 
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.parsers import JSONParser, FormParser, BaseParser
+from rest_framework.exceptions import ParseError
+import json
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
+import logging
 
-from .models import OutboundMessage, Suppression, ProviderEvent, EmailRecipient, EmailJob, Campaign
+from .models import OutboundMessage, Suppression, ProviderEvent, EmailRecipient, EmailJob, Campaign, CampaignRecipient
 from monitoring.utils import record_alert
 from monitoring.models import MonitoringAlert
 from django.db import transaction, models
+
+logger = logging.getLogger(__name__)
 
 
 class ProviderCallbackView(APIView):
@@ -15,6 +23,10 @@ class ProviderCallbackView(APIView):
     permission_classes = []
 
     def post(self, request, channel: str):
+        raw_body = request.body.decode("utf-8", errors="ignore")
+        logger.info("Provider callback received", extra={"channel": channel, "body": raw_body, "content_type": request.META.get("CONTENT_TYPE")})
+        # Debug print for visibility in dev logs
+        print(f"[ProviderCallbackView] channel={channel} body={raw_body}")
         payload = request.data if isinstance(request.data, dict) else {}
         provider_message_id = payload.get("message_id") or payload.get("id")
         status = (payload.get("status") or "").lower()
@@ -80,12 +92,55 @@ class ProviderCallbackView(APIView):
         return Response({"status": "ignored", "reason": "unhandled status"}, status=202)
 
 
+class RawPassthroughParser(BaseParser):
+    """
+    Accept any content-type and return raw bytes without raising ParseError.
+    Useful for tolerant webhooks (e.g., SendGrid) that may POST NDJSON or plain text.
+    """
+    media_type = "*/*"
+
+    def parse(self, stream, media_type=None, parser_context=None):
+        return stream.read()
+
+
+@method_decorator(csrf_exempt, name="dispatch")
 class SendGridEventView(APIView):
     authentication_classes = []
     permission_classes = []
+    parser_classes = [RawPassthroughParser, JSONParser, FormParser]
 
     def post(self, request):
-        events = request.data if isinstance(request.data, list) else []
+        body_text = request.body.decode("utf-8", errors="ignore")
+        logger.info("SendGrid webhook received", extra={"body": body_text, "content_type": request.META.get("CONTENT_TYPE")})
+        print(f"[SendGridEventView] raw body: {body_text}")
+        # Try to parse tolerant to any content
+        data = None
+        if isinstance(request.data, (list, dict)):
+            data = request.data
+        else:
+            # raw bytes from RawPassthroughParser or fallback
+            raw = body_text
+            try:
+                data = json.loads(raw)
+            except Exception:
+                # Try newline-delimited JSON objects
+                objs = []
+                for line in raw.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        objs.append(json.loads(line))
+                    except Exception:
+                        continue
+                data = objs if objs else []
+
+        # Normalize to a list of events
+        events = data if isinstance(data, list) else [data] if isinstance(data, dict) else []
+        if not events:
+            logger.warning("SendGrid webhook parse produced no events", extra={"body": body_text, "content_type": request.META.get("CONTENT_TYPE")})
+            print("[SendGridEventView] no events parsed")
+            return Response({"status": "ignored", "reason": "no events"}, status=200)
         failed = 0
         updated = 0
         for ev in events:
@@ -107,6 +162,12 @@ class SendGridEventView(APIView):
                         job.save(update_fields=["failed_count", "status", "updated_at"])
                         if job.campaign:
                             Campaign.objects.filter(id=job.campaign_id).update(failed_count=models.F("failed_count") + 1)
+                            if rec.contact_id:
+                                CampaignRecipient.objects.filter(campaign_id=job.campaign_id, contact_id=rec.contact_id).update(
+                                    status=CampaignRecipient.STATUS_FAILED,
+                                    provider_message_id=rec.provider_message_id,
+                                    error_message=rec.error,
+                                )
                         failed += 1
                         identifier = rec.email
                         Suppression.objects.get_or_create(
@@ -116,10 +177,19 @@ class SendGridEventView(APIView):
                             defaults={"reason": event_type},
                         )
                     elif event_type in ["delivered"]:
-                        rec.status = EmailRecipient.STATUS_SENT
-                        rec.save(update_fields=["status", "updated_at"])
-                        if job.campaign:
+                        delivered_increment = False
+                        # Do not downgrade a READ back to SENT
+                        if rec.status != EmailRecipient.STATUS_READ:
+                            rec.status = EmailRecipient.STATUS_SENT
+                            rec.save(update_fields=["status", "updated_at"])
+                            delivered_increment = True
+                        if delivered_increment and job.campaign:
                             Campaign.objects.filter(id=job.campaign_id).update(delivered_count=models.F("delivered_count") + 1)
+                            if rec.contact_id:
+                                CampaignRecipient.objects.filter(campaign_id=job.campaign_id, contact_id=rec.contact_id).update(
+                                    status=CampaignRecipient.STATUS_DELIVERED,
+                                    provider_message_id=rec.provider_message_id,
+                                )
                         updated += 1
                     elif event_type in ["open"]:
                         if rec.status != EmailRecipient.STATUS_READ:
@@ -128,6 +198,11 @@ class SendGridEventView(APIView):
                             rec.save(update_fields=["status", "read_at", "updated_at"])
                             if job.campaign:
                                 Campaign.objects.filter(id=job.campaign_id).update(read_count=models.F("read_count") + 1)
+                                if rec.contact_id:
+                                    CampaignRecipient.objects.filter(campaign_id=job.campaign_id, contact_id=rec.contact_id).update(
+                                        status=CampaignRecipient.STATUS_READ,
+                                        provider_message_id=rec.provider_message_id,
+                                    )
             except EmailRecipient.DoesNotExist:
                 continue
         return Response({"status": "ok", "failed_updated": failed, "updated": updated})

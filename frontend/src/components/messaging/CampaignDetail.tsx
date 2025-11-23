@@ -58,6 +58,16 @@ export function CampaignDetail() {
   const sent = campaign.sent_count || delivered;
   const successPct = total ? Math.min(100, Math.round(((delivered + read) / total) * 100)) : 0;
 
+  const statusLabel = (s: string) => {
+    if (s === 'queued') return 'Queued';
+    if (s === 'sent') return 'Sent';
+    if (s === 'delivered') return 'Delivered';
+    if (s === 'read') return 'Read';
+    if (s === 'failed') return 'Failed';
+    if (s === 'unsubscribed') return 'Unsubscribed';
+    return s;
+  };
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center gap-2">
@@ -149,16 +159,16 @@ export function CampaignDetail() {
               </thead>
               <tbody>
                 {recipients.map((r) => (
-                  <tr key={r.id} className="border-b last:border-0">
-                    <td className="px-3 py-2">
-                      <div className="text-gray-900">{r.contact_name || `Contact #${r.contact_id}`}</div>
-                      <div className="text-gray-600 text-xs">{r.contact_email || r.contact_phone || r.contact_instagram_user_id || '—'}</div>
-                    </td>
-                    <td className="px-3 py-2 text-gray-700">{r.contact_email || r.contact_phone || r.contact_instagram_user_id || '—'}</td>
-                    <td className="px-3 py-2"><span className={`text-xs px-2 py-1 rounded-full ${statusClass(r.status)}`}>{r.status}</span></td>
-                    <td className="px-3 py-2 text-xs text-red-700">{r.error_reason || '—'}</td>
-                  </tr>
-                ))}
+                <tr key={r.id} className="border-b last:border-0">
+                  <td className="px-3 py-2">
+                    <div className="text-gray-900">{r.contact_name || `Contact #${r.contact_id}`}</div>
+                    <div className="text-gray-600 text-xs">{r.contact_email || r.contact_phone || r.contact_instagram_user_id || '—'}</div>
+                  </td>
+                  <td className="px-3 py-2 text-gray-700">{r.contact_email || r.contact_phone || r.contact_instagram_user_id || '—'}</td>
+                    <td className="px-3 py-2"><span className={`text-xs px-2 py-1 rounded-full ${statusClass(r.status)}`}>{statusLabel(r.status)}</span></td>
+                    <td className="px-3 py-2 text-xs text-red-700">{(r as any).error_message || '—'}</td>
+                </tr>
+              ))}
               </tbody>
             </table>
           )}

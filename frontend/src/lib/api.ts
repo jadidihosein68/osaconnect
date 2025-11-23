@@ -92,6 +92,7 @@ export interface CampaignRecipient {
   contact_instagram_user_id?: string;
   status: string;
   error_reason?: string | null;
+  error_message?: string | null;
   sent_at?: string | null;
   delivered_at?: string | null;
   read_at?: string | null;

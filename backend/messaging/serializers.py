@@ -368,10 +368,11 @@ class InstagramMessageSerializer(serializers.ModelSerializer):
 
 class CampaignRecipientSerializer(serializers.ModelSerializer):
     contact_name = serializers.CharField(source="contact.full_name", read_only=True)
+    contact_email = serializers.EmailField(source="contact.email", read_only=True)
 
     class Meta:
         model = CampaignRecipient
-        fields = ["id", "contact", "contact_name", "status", "provider_message_id", "error_message", "created_at"]
+        fields = ["id", "contact", "contact_name", "contact_email", "status", "provider_message_id", "error_message", "created_at"]
         read_only_fields = ["id", "status", "provider_message_id", "error_message", "created_at"]
 
 
