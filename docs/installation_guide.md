@@ -33,6 +33,10 @@ Apply migrations:
 ```bash
 python manage.py migrate
 ```
+If you see an error like `no such table: monitoring_monitoringalert`, ensure the monitoring app migrations are applied:
+```bash
+python manage.py migrate monitoring
+```
 
 Seed (optional):
 ```bash
@@ -162,4 +166,3 @@ python manage.py migrate
 - Use HTTPS for all webhooks.
 - Configure Celery + Redis with non-eager mode for real async sends/retries.
 - Store secrets in env/secret manager, not in VCS.
-
