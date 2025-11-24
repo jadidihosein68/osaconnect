@@ -24,9 +24,12 @@ class ProviderCallbackView(APIView):
 
     def post(self, request, channel: str):
         raw_body = request.body.decode("utf-8", errors="ignore")
-        logger.info("Provider callback received", extra={"channel": channel, "body": raw_body, "content_type": request.META.get("CONTENT_TYPE")})
-        # Debug print for visibility in dev logs
-        print(f"[ProviderCallbackView] channel={channel} body={raw_body}")
+        logger.info(
+            "webhook_received provider=%s body=%s content_type=%s",
+            channel,
+            raw_body,
+            request.META.get("CONTENT_TYPE"),
+        )
         payload = request.data if isinstance(request.data, dict) else {}
         provider_message_id = payload.get("message_id") or payload.get("id")
         status = (payload.get("status") or "").lower()
@@ -111,8 +114,11 @@ class SendGridEventView(APIView):
 
     def post(self, request):
         body_text = request.body.decode("utf-8", errors="ignore")
-        logger.info("SendGrid webhook received", extra={"body": body_text, "content_type": request.META.get("CONTENT_TYPE")})
-        print(f"[SendGridEventView] raw body: {body_text}")
+        logger.info(
+            "webhook_received provider=sendgrid body=%s content_type=%s",
+            body_text,
+            request.META.get("CONTENT_TYPE"),
+        )
         # Try to parse tolerant to any content
         data = None
         if isinstance(request.data, (list, dict)):
@@ -138,8 +144,11 @@ class SendGridEventView(APIView):
         # Normalize to a list of events
         events = data if isinstance(data, list) else [data] if isinstance(data, dict) else []
         if not events:
-            logger.warning("SendGrid webhook parse produced no events", extra={"body": body_text, "content_type": request.META.get("CONTENT_TYPE")})
-            print("[SendGridEventView] no events parsed")
+            logger.warning(
+                "sendgrid_webhook_no_events body=%s content_type=%s",
+                body_text,
+                request.META.get("CONTENT_TYPE"),
+            )
             return Response({"status": "ignored", "reason": "no events"}, status=200)
         failed = 0
         updated = 0

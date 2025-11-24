@@ -4,6 +4,8 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
+import uuid
+import logging
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
@@ -40,8 +42,10 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "corbi.request_id.RequestIDMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "corbi.http_logging.HttpLoggingMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -100,6 +104,8 @@ MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+ENVIRONMENT = os.getenv("ENVIRONMENT", "DEV")
+LOG_HTTP_BODIES = os.getenv("LOG_HTTP_BODIES", "true" if DEBUG else "false").lower() == "true"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -155,46 +161,70 @@ ASSISTANT_KB_PATH = os.getenv("ASSISTANT_KB_PATH", BASE_DIR / "knowledge_base.md
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
+    "filters": {
+        "request_id": {
+            "()": "django.utils.log.CallbackFilter",
+            "callback": lambda record: setattr(
+                record,
+                "request_id",
+                getattr(record, "request_id", None) or __import__("corbi.request_id").request_id.get_request_id(),  # type: ignore
+            )
+            or True,
+        },
+    },
     "formatters": {
-        "verbose": {"format": "[{asctime}] {levelname} {name}: {message}", "style": "{"},
+        "structured": {
+            "format": "[{asctime}] {levelname} {name} request_id={request_id} env="
+            + os.getenv("ENVIRONMENT", "DEV")
+            + " :: {message}",
+            "style": "{",
+        },
     },
     "handlers": {
-        # Console shows info+ again so logs are visible during dev
-        "console": {"class": "logging.StreamHandler", "formatter": "verbose", "level": "INFO"},
-        # Daily rotation at midnight; files suffixed by date; keep 7 days
-        "file": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "structured",
+            "level": "DEBUG" if DEBUG else "INFO",
+            "filters": ["request_id"],
+        },
+        "app_file": {
             "class": "logging.handlers.TimedRotatingFileHandler",
-            "formatter": "verbose",
-            "filename": str(LOG_DIR / "corbi.log"),
+            "formatter": "structured",
+            "filename": str(LOG_DIR / "application.log"),
             "when": "midnight",
-            "backupCount": 7,
+            "backupCount": 30,
             "encoding": "utf-8",
             "delay": True,
+            "filters": ["request_id"],
         },
-        # Warnings/errors into a separate daily file, keep 14 days
         "error_file": {
             "class": "logging.handlers.TimedRotatingFileHandler",
-            "formatter": "verbose",
-            "filename": str(LOG_DIR / "corbi-errors.log"),
+            "formatter": "structured",
+            "filename": str(LOG_DIR / "application-errors.log"),
             "when": "midnight",
-            "backupCount": 14,
+            "backupCount": 30,
             "encoding": "utf-8",
             "level": "WARNING",
             "delay": True,
+            "filters": ["request_id"],
         },
     },
     "loggers": {
         "django": {
-            "handlers": ["console", "file", "error_file"],
+            "handlers": ["console", "app_file", "error_file"],
             "level": os.getenv("DJANGO_LOG_LEVEL", "INFO"),
         },
         "django.request": {
-            "handlers": ["console", "file", "error_file"],
+            "handlers": ["console", "app_file", "error_file"],
             "level": "ERROR",
             "propagate": False,
         },
         "corbi.audit": {
-            "handlers": ["console", "file", "error_file"],
+            "handlers": ["console", "app_file", "error_file"],
+            "level": "INFO",
+        },
+        "": {  # root logger
+            "handlers": ["console", "app_file", "error_file"],
             "level": "INFO",
         },
     },
