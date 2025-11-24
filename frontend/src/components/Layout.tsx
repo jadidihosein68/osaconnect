@@ -71,7 +71,7 @@ export function Layout({ children, currentScreen, onNavigate, onLogout, organiza
         { id: '/messaging/campaign', label: 'Campaigns' },
       ]
     },
-    { id: 'inbound-logs', label: 'Inbound Logs', icon: Inbox },
+    { id: '/inbound', label: 'Inbound Logs', icon: Inbox },
     { id: 'templates', label: 'Templates', icon: FileText },
     { id: 'ai-assistant', label: 'AI Assistant', icon: Bot },
     { id: 'bookings', label: 'Bookings', icon: Calendar },
