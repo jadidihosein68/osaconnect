@@ -45,12 +45,18 @@ class MetricsView(APIView):
 
     def get(self, request):
         from contacts.models import Contact
-        from messaging.models import InboundMessage, OutboundMessage
+        from messaging.models import InboundMessage, OutboundMessage, EmailRecipient
         from bookings.models import Booking
+        from messaging.models import Campaign, CampaignRecipient
+        from monitoring.models import MonitoringAlert
         from organizations.utils import get_current_org
 
         org = get_current_org(request)
         today = timezone.now().date()
+        campaigns = Campaign.objects.filter(organization=org)
+        email_recipients = EmailRecipient.objects.filter(job__organization=org)
+        alerts = MonitoringAlert.objects.filter(organization=org)
+        email_read = email_recipients.filter(status__in=["read"]).count()
         return Response(
             {
                 "contacts": Contact.objects.filter(organization=org).count(),
@@ -66,6 +72,13 @@ class MetricsView(APIView):
                 "failed_today": OutboundMessage.objects.filter(
                     organization=org, created_at__date=today, status=OutboundMessage.STATUS_FAILED
                 ).count(),
+                "campaigns": campaigns.count(),
+                "campaigns_active": campaigns.exclude(status__in=["completed", "failed"]).count(),
+                "email_jobs_recipients": email_recipients.count(),
+                "email_jobs_delivered": email_recipients.filter(status__in=["delivered", "read"]).count(),
+                "email_jobs_failed": email_recipients.filter(status="failed").count(),
+                "email_jobs_read": email_read,
+                "alerts_open": alerts.filter(is_acknowledged=False).count(),
             }
         )
 
@@ -125,6 +138,8 @@ class MonitoringDetailView(APIView):
     def get(self, request):
         from messaging.models import OutboundMessage, InboundMessage, ProviderEvent
         from bookings.models import Booking
+        from messaging.models import Campaign, EmailRecipient
+        from monitoring.models import MonitoringAlert
         from organizations.utils import get_current_org
 
         org = get_current_org(request)
@@ -160,6 +175,17 @@ class MonitoringDetailView(APIView):
         bookings_today = Booking.objects.filter(organization=org, created_at__date=today)
         booking_failures = bookings_today.filter(status=Booking.STATUS_CANCELLED).count()
 
+        # Email/campaign rollups (same-day)
+        campaign_count = Campaign.objects.filter(organization=org, created_at__date=today).count()
+        email_recipients = EmailRecipient.objects.filter(job__organization=org, created_at__date=today)
+        email_summary = {
+            "total": email_recipients.count(),
+            "delivered": email_recipients.filter(status__in=["delivered", "read"]).count(),
+            "failed": email_recipients.filter(status="failed").count(),
+            "read": email_recipients.filter(status="read").count(),
+        }
+        alerts_today = MonitoringAlert.objects.filter(organization=org, created_at__date=today)
+
         return Response(
             {
                 "per_channel": per_channel,
@@ -170,6 +196,9 @@ class MonitoringDetailView(APIView):
                     "booking_failures": booking_failures,
                     "ai_failures": 0,
                     "avg_callback_latency_ms": avg_latency,
+                    "campaigns_today": campaign_count,
+                    "email_recipients": email_summary,
+                    "alerts_today": alerts_today.count(),
                 },
                 "failure_reasons": failure_reasons,
             }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Send, AlertCircle, Inbox, Calendar, Bot } from 'lucide-react';
+import { Send, AlertCircle, Inbox, Calendar, Bot, Megaphone, Mail, Bell } from 'lucide-react';
 import { Button } from './ui/button';
 import { fetchDashboard } from '../lib/api';
 
@@ -25,10 +25,70 @@ export function Dashboard({ onNavigate, orgId, isLoggedIn }: DashboardProps) {
       try {
         const { metrics, outbound, inbound, bookings } = await fetchDashboard();
         setStats([
-          { title: 'Outbound Messages', value: metrics.outbound, icon: Send, color: 'text-blue-600', bgColor: 'bg-blue-100' },
-          { title: 'Failed Messages', value: metrics.failed, icon: AlertCircle, color: 'text-red-600', bgColor: 'bg-red-100' },
-          { title: 'Inbound Captured', value: metrics.inbound, icon: Inbox, color: 'text-green-600', bgColor: 'bg-green-100' },
-          { title: 'Bookings', value: metrics.bookings, icon: Calendar, color: 'text-purple-600', bgColor: 'bg-purple-100' },
+          {
+            title: 'Outbound Messages',
+            value: metrics.outbound,
+            icon: Send,
+            color: 'text-blue-600',
+            bgColor: 'bg-blue-100',
+            tooltip: 'Total outbound messages sent (all channels, org-scoped).',
+          },
+          {
+            title: 'Failed Messages',
+            value: metrics.failed,
+            icon: AlertCircle,
+            color: 'text-red-600',
+            bgColor: 'bg-red-100',
+            tooltip: 'Outbound messages with a failed status.',
+          },
+          {
+            title: 'Inbound Captured',
+            value: metrics.inbound,
+            icon: Inbox,
+            color: 'text-green-600',
+            bgColor: 'bg-green-100',
+            tooltip: 'Inbound messages logged for diagnostics.',
+          },
+          {
+            title: 'Bookings',
+            value: metrics.bookings,
+            icon: Calendar,
+            color: 'text-purple-600',
+            bgColor: 'bg-purple-100',
+            tooltip: 'Total bookings in this organization.',
+          },
+          {
+            title: 'Campaigns',
+            value: metrics.campaigns ?? 0,
+            icon: Megaphone,
+            color: 'text-indigo-600',
+            bgColor: 'bg-indigo-100',
+            tooltip: 'Total campaigns created (all channels).',
+          },
+          {
+            title: 'Email Recipients',
+            value: metrics.email_jobs_recipients ?? 0,
+            icon: Mail,
+            color: 'text-amber-600',
+            bgColor: 'bg-amber-100',
+            tooltip: 'Total email recipients across jobs/campaigns.',
+          },
+          {
+            title: 'Email Delivered',
+            value: metrics.email_jobs_delivered ?? 0,
+            icon: Mail,
+            color: 'text-green-600',
+            bgColor: 'bg-green-100',
+            tooltip: 'Email recipients marked delivered/read.',
+          },
+          {
+            title: 'Alerts Open',
+            value: metrics.alerts_open ?? 0,
+            icon: Bell,
+            color: 'text-rose-600',
+            bgColor: 'bg-rose-100',
+            tooltip: 'Open monitoring alerts (not acknowledged).',
+          },
         ]);
         setUpcomingBookings(bookings.slice(0, 4).map((b: any) => ({
           id: b.id,
@@ -70,11 +130,11 @@ export function Dashboard({ onNavigate, orgId, isLoggedIn }: DashboardProps) {
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-600 mb-1">{stat.title}</p>
+                    <p className="text-gray-600 mb-1" title={stat.tooltip || ''}>{stat.title}</p>
                     <p className="text-gray-900">{stat.value}</p>
                   </div>
                   <div className={`w-12 h-12 ${stat.bgColor} rounded-lg flex items-center justify-center`}>
-                    <stat.icon className={`w-6 h-6 ${stat.color}`} />
+                    <stat.icon className={`w-6 h-6 ${stat.color}`} title={stat.tooltip || ''} />
                   </div>
                 </div>
               </CardContent>
