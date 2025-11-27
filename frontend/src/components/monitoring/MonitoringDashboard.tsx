@@ -1,13 +1,30 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { AlertCircle, Clock } from 'lucide-react';
 import { fetchMonitoringSummary, fetchOutbound, fetchMonitoringDetails, fetchMonitoringEvents, fetchMonitoringAlerts } from '../../lib/api';
 
 export function MonitoringDashboard() {
-  const [summary, setSummary] = useState<{ totals: Record<string, number>; success_rate: number; average_response_ms: number | null } | null>(null);
+  const [summary, setSummary] = useState<{
+    totals: Record<string, number>;
+    success_rate: number;
+    average_response_ms: number | null;
+  } | null>(null);
   const [details, setDetails] = useState<{
     per_channel: Record<string, { total: number; delivered: number; failed: number; success_rate: number }>;
-    summary: { outbound: number; inbound: number; callback_errors: number; booking_failures: number; ai_failures: number; avg_callback_latency_ms: number };
+    summary: {
+      outbound: number;
+      inbound: number;
+      callback_errors: number;
+      booking_failures: number;
+      ai_failures: number;
+      avg_callback_latency_ms: number;
+      p50_latency_ms?: number;
+      p95_latency_ms?: number;
+      p99_latency_ms?: number;
+      campaigns_today?: number;
+      alerts_today?: number;
+    };
     failure_reasons: Record<string, number>;
   } | null>(null);
   const [outbound, setOutbound] = useState<any[]>([]);
@@ -15,6 +32,7 @@ export function MonitoringDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [events, setEvents] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
+  const [range, setRange] = useState<'today' | '7d' | '30d'>('today');
 
   useEffect(() => {
     const load = async () => {
@@ -22,9 +40,9 @@ export function MonitoringDashboard() {
       setError(null);
       try {
         const [m, o, d, ev, al] = await Promise.all([
-          fetchMonitoringSummary(),
+          fetchMonitoringSummary(range),
           fetchOutbound(),
-          fetchMonitoringDetails(),
+          fetchMonitoringDetails(range),
           fetchMonitoringEvents(50),
           fetchMonitoringAlerts(20),
         ]);
@@ -40,7 +58,7 @@ export function MonitoringDashboard() {
       }
     };
     load();
-  }, []);
+  }, [range]);
 
   const samples = useMemo(() => {
     // Fake time series from outbound created_at grouped by date
@@ -53,15 +71,28 @@ export function MonitoringDashboard() {
   }, [outbound]);
 
   const successRate = summary ? `${summary.success_rate.toFixed(1)}%` : '—';
-  const failedMessages = summary?.totals?.failed_today ?? '—';
-  const totalToday = summary?.totals?.outbound_today ?? '—';
+  const failedTotal = summary?.totals?.failed_total ?? summary?.totals?.failed_today ?? '—';
+  const outboundTotal = summary?.totals?.outbound_total ?? summary?.totals?.outbound_today ?? '—';
+  const inboundTotal = summary?.totals?.inbound_total ?? summary?.totals?.inbound_today ?? '—';
   const avgResponseTime = summary?.average_response_ms ? `${summary.average_response_ms} ms` : '—';
 
   const failureData = details
     ? Object.entries(details.failure_reasons).map(([reason, count]) => ({ reason, count }))
     : [];
 
-  const extraStats = details?.summary;
+  const extraStats = details?.summary || {
+    outbound: 0,
+    inbound: 0,
+    callback_errors: 0,
+    booking_failures: 0,
+    ai_failures: 0,
+    avg_callback_latency_ms: 0,
+    p50_latency_ms: 0,
+    p95_latency_ms: 0,
+    p99_latency_ms: 0,
+    campaigns_today: 0,
+    alerts_today: 0,
+  };
   const perChannel = details?.per_channel || {};
 
   return (
@@ -74,10 +105,33 @@ export function MonitoringDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-700">Range:</span>
+          <div className="flex gap-2">
+            {[
+              { id: 'today', label: 'Today' },
+              { id: '7d', label: 'Last 7d' },
+              { id: '30d', label: 'Last 30d' },
+            ].map((opt) => (
+              <button
+                key={opt.id}
+                onClick={() => setRange(opt.id as any)}
+                className={`px-3 py-1 rounded-full border text-sm ${
+                  range === opt.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-200'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-6">
-            <div className="text-gray-600 mb-1">Total Today</div>
-            <div className="text-gray-900 text-xl">{totalToday}</div>
+            <div className="text-gray-600 mb-1">Outbound (total)</div>
+            <div className="text-gray-900 text-xl">{outboundTotal}</div>
           </CardContent>
         </Card>
         <Card>
@@ -89,12 +143,18 @@ export function MonitoringDashboard() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-gray-600 mb-1">Failed Messages</div>
-            <div className="text-gray-900 text-xl">{failedMessages}</div>
+            <div className="text-gray-900 text-xl">{failedTotal}</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <div className="text-gray-600 mb-1">Avg Response Time</div>
+            <div className="text-gray-600 mb-1">Inbound (total)</div>
+            <div className="text-gray-900 text-xl">{inboundTotal}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-gray-600 mb-1">Avg Callback Latency</div>
             <div className="text-gray-900 text-xl">{avgResponseTime}</div>
           </CardContent>
         </Card>
@@ -104,26 +164,38 @@ export function MonitoringDashboard() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-gray-600 mb-1">Callback Errors</div>
-            <div className="text-gray-900 text-xl">{extraStats?.callback_errors ?? '—'}</div>
+            <div className="text-gray-900 text-xl">{extraStats.callback_errors ?? 0}</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="text-gray-600 mb-1">Booking Failures</div>
-            <div className="text-gray-900 text-xl">{extraStats?.booking_failures ?? '—'}</div>
+            <div className="text-gray-900 text-xl">{extraStats.booking_failures ?? 0}</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <div className="text-gray-600 mb-1">AI Failures</div>
-            <div className="text-gray-900 text-xl">{extraStats?.ai_failures ?? '—'}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-gray-600 mb-1">Avg Callback Latency</div>
+            <div className="flex items-center gap-2 text-gray-600 mb-1">
+              <Clock className="w-4 h-4" />
+              <span title="95th percentile callback latency for the selected range.">Latency p95</span>
+            </div>
             <div className="text-gray-900 text-xl">
-              {extraStats?.avg_callback_latency_ms ? `${extraStats.avg_callback_latency_ms.toFixed(0)} ms` : '—'}
+              {typeof extraStats.p95_latency_ms === 'number' && extraStats.p95_latency_ms > 0
+                ? `${extraStats.p95_latency_ms.toFixed(0)} ms`
+                : 'No data'}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 text-gray-600 mb-1">
+              <Clock className="w-4 h-4" />
+              <span title="99th percentile callback latency for the selected range.">Latency p99</span>
+            </div>
+            <div className="text-gray-900 text-xl">
+              {typeof extraStats.p99_latency_ms === 'number' && extraStats.p99_latency_ms > 0
+                ? `${extraStats.p99_latency_ms.toFixed(0)} ms`
+                : 'No data'}
             </div>
           </CardContent>
         </Card>

@@ -706,17 +706,17 @@ export async function fetchBillingLogs(): Promise<BillingLog[]> {
   return data;
 }
 
-export async function fetchMonitoringSummary(): Promise<{ totals: Record<string, number>; success_rate: number; average_response_ms: number | null }> {
-  const { data } = await api.get("/monitoring/summary/");
+export async function fetchMonitoringSummary(range: string = "today"): Promise<{ totals: Record<string, number>; success_rate: number; average_response_ms: number | null }> {
+  const { data } = await api.get(`/monitoring/summary/?range=${range}`);
   return data;
 }
 
-export async function fetchMonitoringDetails(): Promise<{
+export async function fetchMonitoringDetails(range: string = "today"): Promise<{
   per_channel: Record<string, { total: number; delivered: number; failed: number; success_rate: number }>;
-  summary: { outbound: number; inbound: number; callback_errors: number; booking_failures: number; ai_failures: number; avg_callback_latency_ms: number };
+  summary: { outbound: number; inbound: number; callback_errors: number; booking_failures: number; ai_failures: number; avg_callback_latency_ms: number; p50_latency_ms?: number; p95_latency_ms?: number; p99_latency_ms?: number; campaigns_today?: number; email_recipients?: any; alerts_today?: number };
   failure_reasons: Record<string, number>;
 }> {
-  const { data } = await api.get("/monitoring/details/");
+  const { data } = await api.get(`/monitoring/details/?range=${range}`);
   return data;
 }
 
