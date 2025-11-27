@@ -120,6 +120,28 @@ export interface CampaignCostConfig {
   };
 }
 
+export interface Notification {
+  id: number;
+  type: string;
+  severity: string;
+  title: string;
+  body?: string;
+  target_url?: string | null;
+  data?: Record<string, any>;
+  created_at: string;
+}
+
+export interface NotificationRecipient {
+  id: number;
+  read_at?: string | null;
+  created_at: string;
+  notification: Notification;
+}
+
+export interface NotificationSummary {
+  unread_count: number;
+}
+
 export interface ContactGroup {
   id: number;
   name: string;
@@ -468,6 +490,46 @@ export async function fetchCampaignThrottle(): Promise<{ default_limit: number; 
 
 export async function fetchCampaignCosts(): Promise<CampaignCostConfig> {
   const { data } = await api.get("/campaigns/costs/");
+  return data;
+}
+
+// Notifications
+export async function fetchNotificationSummary(): Promise<NotificationSummary> {
+  const { data } = await api.get("/notifications/summary/");
+  return data;
+}
+
+export async function fetchNotifications(params?: {
+  page?: number;
+  page_size?: number;
+  type?: string[] | string;
+  severity?: string[] | string;
+  read?: "true" | "false" | "all";
+}): Promise<{ results: NotificationRecipient[]; count: number; page: number; page_size: number }> {
+  const query = new URLSearchParams();
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.page_size) query.set("page_size", String(params.page_size));
+  if (params?.type) {
+    const types = Array.isArray(params.type) ? params.type : [params.type];
+    types.forEach((t) => query.append("type", t));
+  }
+  if (params?.severity) {
+    const sev = Array.isArray(params.severity) ? params.severity : [params.severity];
+    sev.forEach((s) => query.append("severity", s));
+  }
+  if (params?.read) query.set("read", params.read);
+  const qs = query.toString() ? `?${query.toString()}` : "";
+  const { data } = await api.get(`/notifications/${qs}`);
+  return data;
+}
+
+export async function markNotificationRead(id: number, read = true) {
+  const { data } = await api.post(`/notifications/${id}/read/`, { read });
+  return data;
+}
+
+export async function markAllNotificationsRead() {
+  const { data } = await api.post("/notifications/mark-all-read/");
   return data;
 }
 

@@ -25,6 +25,7 @@ import { TelegramOnboarding } from './components/messaging/TelegramOnboarding';
 import { CampaignDetail } from './components/messaging/CampaignDetail';
 import { Layout } from './components/Layout';
 import { RequireAuth } from './components/RequireAuth';
+import { NotificationList } from './components/notifications/NotificationList';
 import { fetchMemberships, setAuth, setOrg, Membership, clearAuth } from './lib/api';
 
 interface AppProps {
@@ -259,6 +260,7 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
                 <Route path="/monitoring" element={<MonitoringDashboard />} />
                 <Route path="/billing" element={<Billing />} />
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/notifications" element={<NotificationList />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </RequireAuth>

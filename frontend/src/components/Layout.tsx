@@ -16,6 +16,7 @@ import {
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { useState } from 'react';
+import { NotificationBell } from './notifications/NotificationBell';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -167,6 +168,7 @@ export function Layout({ children, currentScreen, onNavigate, onLogout, organiza
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6">
           <div className="flex-1" />
           <div className="flex items-center gap-4">
+            <NotificationBell orgId={currentOrgId} onNavigate={onNavigate} />
             <div className="flex items-center gap-3">
               {organizations.length > 0 && (
                 <select

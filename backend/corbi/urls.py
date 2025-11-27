@@ -11,6 +11,7 @@ from assistant.views import AssistantView
 from bookings.views import BookingViewSet
 from contacts.views import ContactViewSet, ContactGroupViewSet
 from messaging.views import InboundMessageViewSet, OutboundMessageViewSet, EmailJobViewSet, EmailAttachmentViewSet, unsubscribe, TelegramOnboardingViewSet, TelegramOnboardWebhook, TelegramMessageViewSet, WhatsAppMessageViewSet, TwilioWhatsAppWebhook, TwilioWhatsAppStatusWebhook, InstagramMessageViewSet, InstagramWebhook, CampaignViewSet
+from notifications.views import NotificationViewSet
 from monitoring.views import HealthcheckView, MetricsView, MonitoringSummaryView, SettingsView, MonitoringDetailView, MonitoringEventsView, MonitoringAlertsView
 from organizations.views import MembershipViewSet, me
 from templates_app.views import MessageTemplateViewSet
@@ -37,6 +38,7 @@ router.register(r"telegram/messages", TelegramMessageViewSet, basename="telegram
 router.register(r"whatsapp/messages", WhatsAppMessageViewSet, basename="whatsapp-messages")
 router.register(r"instagram/messages", InstagramMessageViewSet, basename="instagram-messages")
 router.register(r"campaigns", CampaignViewSet, basename="campaigns")
+router.register(r"notifications", NotificationViewSet, basename="notifications")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
