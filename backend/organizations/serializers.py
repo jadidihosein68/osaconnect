@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from .models import Membership, Organization
+from .models import Membership, Organization, OrganizationBranding
 
 
 class OrganizationSerializer(serializers.ModelSerializer):
@@ -28,3 +28,20 @@ class MembershipSerializer(serializers.ModelSerializer):
             "first_name": getattr(user, "first_name", ""),
             "last_name": getattr(user, "last_name", ""),
         }
+
+
+class OrganizationBrandingSerializer(serializers.ModelSerializer):
+    logo_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrganizationBranding
+        fields = ["company_name", "address", "phone", "email", "logo_url"]
+
+    def get_logo_url(self, obj):
+        request = self.context.get("request")
+        if obj.logo and hasattr(obj.logo, "url"):
+            url = obj.logo.url
+            if request:
+                return request.build_absolute_uri(url)
+            return url
+        return None

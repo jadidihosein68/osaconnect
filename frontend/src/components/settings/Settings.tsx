@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -6,7 +6,7 @@ import { Label } from '../ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Upload, CheckCircle, XCircle } from 'lucide-react';
 import { Badge } from '../ui/badge';
-import { connectIntegration, disconnectIntegration, fetchIntegrations, Integration, testIntegration } from '../../lib/api';
+import { connectIntegration, disconnectIntegration, fetchIntegrations, fetchBranding, updateBranding, Integration, testIntegration } from '../../lib/api';
 
 export function Settings() {
   const [activeTab, setActiveTab] = useState('branding');
@@ -14,6 +14,14 @@ export function Settings() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [errors, setErrors] = useState<string | null>(null);
+  const [branding, setBranding] = useState({
+    company_name: '',
+    address: '',
+    phone: '',
+    email: '',
+    logo_url: '',
+  });
+  const [logoFile, setLogoFile] = useState<File | null>(null);
 
   const providerConfig: Record<
     string,
@@ -61,6 +69,7 @@ export function Settings() {
   };
 
   const [formState, setFormState] = useState<Record<string, Record<string, string>>>({});
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -69,6 +78,14 @@ export function Settings() {
       try {
         const data = await fetchIntegrations();
         setIntegrations(data);
+        const b = await fetchBranding();
+        setBranding({
+          company_name: b.company_name || '',
+          address: b.address || '',
+          phone: b.phone || '',
+          email: b.email || '',
+          logo_url: b.logo_url || '',
+        });
       } catch {
         setErrors('Failed to load integrations.');
       } finally {
@@ -231,22 +248,38 @@ export function Settings() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Company Name</Label>
-                <Input defaultValue="Corbi Solutions Inc." />
+                <Input
+                  value={branding.company_name}
+                  onChange={(e) => setBranding((prev) => ({ ...prev, company_name: e.target.value }))}
+                  placeholder="Your company name"
+                />
               </div>
 
               <div className="space-y-2">
                 <Label>Address</Label>
-                <Input defaultValue="123 Business Street, San Francisco, CA 94102" />
+                <Input
+                  value={branding.address}
+                  onChange={(e) => setBranding((prev) => ({ ...prev, address: e.target.value }))}
+                  placeholder="Address"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Phone</Label>
-                  <Input defaultValue="+1 (555) 123-4567" />
+                  <Input
+                    value={branding.phone}
+                    onChange={(e) => setBranding((prev) => ({ ...prev, phone: e.target.value }))}
+                    placeholder="+1 ..."
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Email</Label>
-                  <Input defaultValue="contact@corbi.com" />
+                  <Input
+                    value={branding.email}
+                    onChange={(e) => setBranding((prev) => ({ ...prev, email: e.target.value }))}
+                    placeholder="contact@example.com"
+                  />
                 </div>
               </div>
             </CardContent>
@@ -258,36 +291,80 @@ export function Settings() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-6">
-                <div className="w-24 h-24 bg-indigo-600 rounded-xl flex items-center justify-center">
-                  <svg
-                    className="w-14 h-14 text-white"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-                    />
-                  </svg>
+                <div className="w-24 h-24 bg-gray-100 rounded-xl flex items-center justify-center overflow-hidden border">
+                  {logoFile ? (
+                    <img src={URL.createObjectURL(logoFile)} alt="Preview" className="w-full h-full object-cover" />
+                  ) : branding.logo_url ? (
+                    <img src={branding.logo_url} alt="Logo" className="w-full h-full object-cover" />
+                  ) : (
+                    <svg
+                      className="w-14 h-14 text-gray-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+                      />
+                    </svg>
+                  )}
                 </div>
                 <div className="flex-1">
                   <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
                     <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                     <p className="text-gray-600 mb-2">Click to upload or drag and drop</p>
                     <p className="text-gray-500">PNG, JPG up to 5MB</p>
+                    <input
+                      type="file"
+                      accept="image/png, image/jpeg"
+                      ref={fileInputRef}
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setLogoFile(e.target.files[0]);
+                        }
+                      }}
+                      className="mt-3"
+                    />
                   </div>
                 </div>
               </div>
 
-              <Button>Upload New Logo</Button>
+              <Button onClick={() => fileInputRef.current?.click()}>
+                Upload New Logo
+              </Button>
             </CardContent>
           </Card>
 
           <div className="flex justify-end">
-            <Button size="lg">Save Changes</Button>
+            <Button
+              size="lg"
+              onClick={async () => {
+                setLoading(true);
+                setMessage(null);
+                setErrors(null);
+                try {
+                  const data = await updateBranding(branding, logoFile || undefined);
+                  setBranding({
+                    company_name: data.company_name || '',
+                    address: data.address || '',
+                    phone: data.phone || '',
+                    email: data.email || '',
+                    logo_url: data.logo_url || '',
+                  });
+                  setLogoFile(null);
+                  setMessage('Branding saved.');
+                } catch {
+                  setErrors('Failed to save branding.');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+            >
+              Save Changes
+            </Button>
           </div>
         </TabsContent>
 

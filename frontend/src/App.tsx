@@ -26,7 +26,7 @@ import { CampaignDetail } from './components/messaging/CampaignDetail';
 import { Layout } from './components/Layout';
 import { RequireAuth } from './components/RequireAuth';
 import { NotificationList } from './components/notifications/NotificationList';
-import { fetchMemberships, setAuth, setOrg, Membership, clearAuth } from './lib/api';
+import { fetchMemberships, fetchBranding, setAuth, setOrg, Membership, clearAuth } from './lib/api';
 
 interface AppProps {
   onAuthPersist?: (token: string, orgId?: number) => void;
@@ -41,6 +41,7 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
   const [ready, setReady] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [brandingLogo, setBrandingLogo] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const intendedPathRef = useRef<string | null>(null);
@@ -78,6 +79,12 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
         setOrg(selectedOrg);
         onAuthPersist?.(token, selectedOrg);
         localStorage.setItem('corbi_org', String(selectedOrg));
+        try {
+          const b = await fetchBranding();
+          setBrandingLogo(b.logo_url || null);
+        } catch {
+          setBrandingLogo(null);
+        }
       }
       setIsLoggedIn(true);
       const storedRedirect = sessionStorage.getItem('corbi_redirect');
@@ -100,6 +107,9 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
     setOrgId(org);
     setOrg(org);
     onOrgPersist?.(org);
+    fetchBranding()
+      .then((b) => setBrandingLogo(b.logo_url || null))
+      .catch(() => setBrandingLogo(null));
   };
 
   useEffect(() => {
@@ -132,6 +142,12 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
             setOrg(orgNum);
             onAuthPersist?.(token, orgNum);
             onOrgPersist?.(orgNum);
+            try {
+              const b = await fetchBranding();
+              setBrandingLogo(b.logo_url || null);
+            } catch {
+              setBrandingLogo(null);
+            }
           }
         } catch {
           clearAuth();
@@ -203,6 +219,7 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
           }}
           userName={userName || userEmail || 'User'}
           userEmail={userEmail || undefined}
+          logoUrl={brandingLogo || undefined}
         >
       <Routes future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Route path="/login" element={<Login onLogin={handleLogin} loading={loadingMemberships} memberships={memberships} />} />

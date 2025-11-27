@@ -28,6 +28,7 @@ interface LayoutProps {
   onOrgChange?: (orgId: number) => void;
   userName?: string;
   userEmail?: string;
+  logoUrl?: string | null;
 }
 
 function getInitials(name?: string) {
@@ -37,7 +38,7 @@ function getInitials(name?: string) {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
-export function Layout({ children, currentScreen, onNavigate, onLogout, organizations = [], currentOrgId, onOrgChange, userName, userEmail }: LayoutProps) {
+export function Layout({ children, currentScreen, onNavigate, onLogout, organizations = [], currentOrgId, onOrgChange, userName, userEmail, logoUrl }: LayoutProps) {
   const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({ contacts: true });
 
   const isSubActive = (path: string, subId: string) => {
@@ -96,20 +97,24 @@ export function Layout({ children, currentScreen, onNavigate, onLogout, organiza
       <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
-              <svg
-                className="w-6 h-6 text-white"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-                />
-              </svg>
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center overflow-hidden">
+              {logoUrl ? (
+                <img src={logoUrl} alt="Logo" className="w-full h-full object-cover" />
+              ) : (
+                <svg
+                  className="w-6 h-6 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+                  />
+                </svg>
+              )}
             </div>
             <span className="text-xl text-gray-900">Corbi</span>
           </div>

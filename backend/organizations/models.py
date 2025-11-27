@@ -40,3 +40,16 @@ class Membership(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user} in {self.organization} ({self.role})"
+
+
+class OrganizationBranding(models.Model):
+    organization = models.OneToOneField(Organization, on_delete=models.CASCADE, related_name="branding")
+    company_name = models.CharField(max_length=255, blank=True, default="")
+    address = models.CharField(max_length=500, blank=True, default="")
+    phone = models.CharField(max_length=50, blank=True, default="")
+    email = models.CharField(max_length=255, blank=True, default="")
+    logo = models.ImageField(upload_to="branding/", null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f"Branding for {self.organization_id}"

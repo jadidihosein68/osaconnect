@@ -13,7 +13,7 @@ from contacts.views import ContactViewSet, ContactGroupViewSet
 from messaging.views import InboundMessageViewSet, OutboundMessageViewSet, EmailJobViewSet, EmailAttachmentViewSet, unsubscribe, TelegramOnboardingViewSet, TelegramOnboardWebhook, TelegramMessageViewSet, WhatsAppMessageViewSet, TwilioWhatsAppWebhook, TwilioWhatsAppStatusWebhook, InstagramMessageViewSet, InstagramWebhook, CampaignViewSet
 from notifications.views import NotificationViewSet
 from monitoring.views import HealthcheckView, MetricsView, MonitoringSummaryView, SettingsView, MonitoringDetailView, MonitoringEventsView, MonitoringAlertsView
-from organizations.views import MembershipViewSet, me
+from organizations.views import MembershipViewSet, BrandingViewSet, me
 from templates_app.views import MessageTemplateViewSet
 from messaging.webhooks import InboundWebhookView
 from messaging.callbacks import ProviderCallbackView, SendGridEventView
@@ -32,6 +32,7 @@ router.register(r"email-attachments", EmailAttachmentViewSet, basename="email-at
 router.register(r"telegram/attachments", EmailAttachmentViewSet, basename="telegram-attachment")
 router.register(r"bookings", BookingViewSet, basename="booking")
 router.register(r"memberships", MembershipViewSet, basename="membership")
+router.register(r"branding", BrandingViewSet, basename="branding")
 router.register(r"billing/logs", BillingLogViewSet, basename="billing-log")
 router.register(r"telegram/onboarding", TelegramOnboardingViewSet, basename="telegram-onboarding")
 router.register(r"telegram/messages", TelegramMessageViewSet, basename="telegram-messages")

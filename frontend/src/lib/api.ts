@@ -138,6 +138,14 @@ export interface NotificationRecipient {
   notification: Notification;
 }
 
+export interface Branding {
+  company_name: string;
+  address: string;
+  phone: string;
+  email: string;
+  logo_url?: string | null;
+}
+
 export interface NotificationSummary {
   unread_count: number;
 }
@@ -530,6 +538,27 @@ export async function markNotificationRead(id: number, read = true) {
 
 export async function markAllNotificationsRead() {
   const { data } = await api.post("/notifications/mark-all-read/");
+  return data;
+}
+
+// Branding
+export async function fetchBranding(): Promise<Branding> {
+  const { data } = await api.get("/branding/");
+  return data;
+}
+
+export async function updateBranding(payload: Branding, file?: File): Promise<Branding> {
+  const form = new FormData();
+  form.append("company_name", payload.company_name || "");
+  form.append("address", payload.address || "");
+  form.append("phone", payload.phone || "");
+  form.append("email", payload.email || "");
+  if (file) {
+    form.append("logo", file);
+  }
+  const { data } = await api.post("/branding/", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
   return data;
 }
 
