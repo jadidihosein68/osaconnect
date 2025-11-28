@@ -87,9 +87,32 @@ class ContactSerializer(serializers.ModelSerializer):
         if status != Contact.STATUS_ACTIVE and self.context.get("action") == "send_outbound":
             raise serializers.ValidationError("Outbound messaging is only allowed for active contacts.")
 
+        # Normalize blanks to None
         for field in ["phone_whatsapp", "telegram_chat_id", "instagram_scoped_id", "email"]:
             if field in attrs and not attrs.get(field):
                 attrs[field] = None
+
+        # Duplicate/conflict checks per identifier within org
+        request = self.context.get("request")
+        org = get_current_org(request) if request else None
+        instance_id = getattr(self.instance, "id", None)
+        if org:
+            unique_fields = [
+                ("email", "email"),
+                ("phone_whatsapp", "phone_whatsapp"),
+                ("telegram_chat_id", "telegram_chat_id"),
+                ("instagram_scoped_id", "instagram_scoped_id"),
+                ("instagram_user_id", "instagram_user_id"),
+            ]
+            for payload_key, field_name in unique_fields:
+                val = attrs.get(payload_key)
+                if not val:
+                    continue
+                qs = Contact.objects.filter(organization=org, **{field_name: val})
+                if instance_id:
+                    qs = qs.exclude(pk=instance_id)
+                if qs.exists():
+                    raise serializers.ValidationError({payload_key: f"{payload_key.replace('_', ' ').title()} already used by another contact."})
 
         # Ensure groups are within org
         if "groups" in attrs:

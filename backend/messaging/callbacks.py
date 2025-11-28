@@ -11,6 +11,7 @@ from django.utils import timezone
 import logging
 
 from .models import OutboundMessage, Suppression, ProviderEvent, EmailRecipient, EmailJob, Campaign, CampaignRecipient
+from notifications.service import broadcast_to_org
 from monitoring.utils import record_alert
 from monitoring.models import MonitoringAlert
 from django.db import transaction, models
@@ -212,6 +213,40 @@ class SendGridEventView(APIView):
                                         status=CampaignRecipient.STATUS_READ,
                                         provider_message_id=rec.provider_message_id,
                                     )
+                    # update job/campaign status if all recipients finalized
+                    if job and job.total_recipients:
+                        finalized = job.recipients.filter(status__in=[EmailRecipient.STATUS_SENT, EmailRecipient.STATUS_FAILED, EmailRecipient.STATUS_READ]).count()
+                        if finalized >= job.total_recipients:
+                            job.status = EmailJob.STATUS_COMPLETED if job.failed_count == 0 else EmailJob.STATUS_FAILED
+                            job.completed_at = timezone.now()
+                            job.save(update_fields=["status", "completed_at", "updated_at"])
+                            if job.campaign_id:
+                                # campaign complete when no queued recipients remain
+                                pending = CampaignRecipient.objects.filter(
+                                    campaign_id=job.campaign_id, status=CampaignRecipient.STATUS_QUEUED
+                                ).exists()
+                                if not pending:
+                                    Campaign.objects.filter(id=job.campaign_id).update(
+                                        status=Campaign.STATUS_COMPLETED if job.failed_count == 0 else Campaign.STATUS_FAILED
+                                    )
+                                    if job.failed_count > 0:
+                                        broadcast_to_org(
+                                            job.organization,
+                                            type="CAMPAIGN",
+                                            severity="HIGH",
+                                            title=f"Campaign {job.campaign_id} partially failed",
+                                            body=f"{job.failed_count} recipients failed",
+                                            target_url=f"/messaging/campaign/{job.campaign_id}",
+                                        )
+                                    else:
+                                        broadcast_to_org(
+                                            job.organization,
+                                            type="CAMPAIGN",
+                                            severity="LOW",
+                                            title=f"Campaign {job.campaign_id} completed",
+                                            body=f"{job.total_recipients} recipients processed",
+                                            target_url=f"/messaging/campaign/{job.campaign_id}",
+                                        )
             except EmailRecipient.DoesNotExist:
                 continue
         return Response({"status": "ok", "failed_updated": failed, "updated": updated})

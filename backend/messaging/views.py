@@ -306,6 +306,12 @@ class TelegramOnboardWebhook(APIView):
                     attachments=[],
                     status="received",
                 )
+                InboundMessage.objects.create(
+                    organization=contact.organization,
+                    contact=contact,
+                    channel="telegram",
+                    payload={"text": text, "chat_id": str(chat_id)},
+                )
             return Response({"status": "received"}, status=202)
         parts = text.split(" ", 1)
         if len(parts) < 2:
@@ -649,6 +655,13 @@ class TwilioWhatsAppWebhook(APIView):
             attachments=attachments,
             twilio_message_sid=message_sid,
             status=WhatsAppMessage.STATUS_RECEIVED,
+        )
+        # also log to generic inbound for diagnostics/dashboard
+        InboundMessage.objects.create(
+            organization=org,
+            contact=contact,
+            channel="whatsapp",
+            payload={"text": body, "from": from_number, "to": to_number, "attachments": attachments, "sid": message_sid},
         )
         return Response({"status": "ok"})
 

@@ -26,7 +26,8 @@ import { CampaignDetail } from './components/messaging/CampaignDetail';
 import { Layout } from './components/Layout';
 import { RequireAuth } from './components/RequireAuth';
 import { NotificationList } from './components/notifications/NotificationList';
-import { fetchMemberships, fetchBranding, setAuth, setOrg, Membership, clearAuth } from './lib/api';
+import { Profile } from './components/Profile';
+import { fetchMemberships, fetchBranding, fetchProfile, setAuth, setOrg, Membership, clearAuth } from './lib/api';
 
 interface AppProps {
   onAuthPersist?: (token: string, orgId?: number) => void;
@@ -42,9 +43,31 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
   const [userName, setUserName] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [brandingLogo, setBrandingLogo] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const intendedPathRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail || {};
+      if (detail.avatarUrl !== undefined) {
+        if (detail.avatarUrl) {
+          setAvatarUrl(detail.avatarUrl);
+          localStorage.setItem('corbi_avatar', detail.avatarUrl);
+        } else {
+          setAvatarUrl(null);
+          localStorage.removeItem('corbi_avatar');
+        }
+      }
+      if (detail.username) {
+        setUserName(detail.username);
+        localStorage.setItem('corbi_user', detail.username);
+      }
+    };
+    window.addEventListener('profile-updated', handler as EventListener);
+    return () => window.removeEventListener('profile-updated', handler as EventListener);
+  }, []);
 
   const deriveUserFromMembership = (membership?: Membership) => {
     if (!membership || !membership.user) return { name: null as string | null, email: null as string | null };
@@ -74,6 +97,16 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
         if (userInfo.email) {
           setUserEmail(userInfo.email);
           localStorage.setItem('corbi_email', userInfo.email);
+        }
+        try {
+          const profile = await fetchProfile();
+          if (profile.username) setUserName(profile.username);
+          if (profile.avatar_url) {
+            setAvatarUrl(profile.avatar_url);
+            localStorage.setItem('corbi_avatar', profile.avatar_url);
+          }
+        } catch {
+          setAvatarUrl(null);
         }
         setOrgId(selectedOrg);
         setOrg(selectedOrg);
@@ -117,12 +150,14 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
     const storedOrg = localStorage.getItem('corbi_org');
     const storedUser = localStorage.getItem('corbi_user');
     const storedEmail = localStorage.getItem('corbi_email');
+    const storedAvatar = localStorage.getItem('corbi_avatar');
     const hydrate = async () => {
       if (token) {
         setAuth(token);
         setIsLoggedIn(true);
         if (storedUser) setUserName(storedUser);
         if (storedEmail) setUserEmail(storedEmail);
+        if (storedAvatar) setAvatarUrl(storedAvatar);
         setLoadingMemberships(true);
         try {
           const orgs = await fetchMemberships();
@@ -133,6 +168,16 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
             if (userInfo.email) {
               setUserEmail(userInfo.email);
               localStorage.setItem('corbi_email', userInfo.email);
+            }
+            try {
+              const profile = await fetchProfile();
+              if (profile.username) setUserName(profile.username);
+              if (profile.avatar_url) {
+                setAvatarUrl(profile.avatar_url);
+                localStorage.setItem('corbi_avatar', profile.avatar_url);
+              }
+            } catch {
+              // ignore profile errors
             }
           }
           const selectedOrg = storedOrg || (orgs[0]?.organization.id ? String(orgs[0].organization.id) : null);
@@ -214,12 +259,14 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
           onLogout={() => {
             clearAuth();
             setUserEmail(null);
+            setAvatarUrl(null);
             setIsLoggedIn(false);
             navigate('/login', { replace: true });
           }}
           userName={userName || userEmail || 'User'}
           userEmail={userEmail || undefined}
           logoUrl={brandingLogo || undefined}
+          avatarUrl={avatarUrl || undefined}
         >
       <Routes future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Route path="/login" element={<Login onLogin={handleLogin} loading={loadingMemberships} memberships={memberships} />} />
@@ -278,6 +325,7 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
                 <Route path="/billing" element={<Billing />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/notifications" element={<NotificationList />} />
+                <Route path="/profile" element={<Profile />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </RequireAuth>

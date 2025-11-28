@@ -53,3 +53,13 @@ class OrganizationBranding(models.Model):
 
     def __str__(self) -> str:
         return f"Branding for {self.organization_id}"
+
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
+    phone = models.CharField(max_length=50, blank=True, default="")
+    avatar = models.ImageField(upload_to="profile_avatars/", null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f"Profile for {self.user_id}"

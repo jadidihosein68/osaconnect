@@ -45,7 +45,7 @@ class MetricsView(APIView):
 
     def get(self, request):
         from contacts.models import Contact
-        from messaging.models import InboundMessage, OutboundMessage, EmailRecipient
+        from messaging.models import InboundMessage, OutboundMessage, EmailRecipient, WhatsAppMessage, TelegramMessage
         from bookings.models import Booking
         from messaging.models import Campaign, CampaignRecipient
         from monitoring.models import MonitoringAlert
@@ -59,6 +59,8 @@ class MetricsView(APIView):
         email_read = email_recipients.filter(status__in=["read"]).count()
 
         outbound_msgs = OutboundMessage.objects.filter(organization=org)
+        wa_outbound = WhatsAppMessage.objects.filter(organization=org, direction=WhatsAppMessage.DIR_OUTBOUND)
+        tg_outbound = TelegramMessage.objects.filter(organization=org, direction=TelegramMessage.DIR_OUTBOUND)
         outbound_failed = outbound_msgs.filter(status=OutboundMessage.STATUS_FAILED).count()
         outbound_today_msgs = outbound_msgs.filter(created_at__date=today).count()
         outbound_today_failed = outbound_msgs.filter(created_at__date=today, status=OutboundMessage.STATUS_FAILED).count()
@@ -71,12 +73,12 @@ class MetricsView(APIView):
         return Response(
             {
                 "contacts": Contact.objects.filter(organization=org).count(),
-                "outbound": outbound_msgs.count() + email_total,
+                "outbound": outbound_msgs.count() + wa_outbound.count() + tg_outbound.count() + email_total,
                 "inbound": InboundMessage.objects.filter(organization=org).count(),
                 "bookings": Booking.objects.filter(organization=org).count(),
                 "retrying": OutboundMessage.objects.filter(organization=org, status=OutboundMessage.STATUS_RETRYING).count(),
                 "failed": outbound_failed + email_failed,
-                "today_outbound": outbound_today_msgs + email_today,
+                "today_outbound": outbound_today_msgs + wa_outbound.filter(created_at__date=today).count() + tg_outbound.filter(created_at__date=today).count() + email_today,
                 "delivered_today": outbound_msgs.filter(
                     created_at__date=today, status__in=[OutboundMessage.STATUS_DELIVERED, OutboundMessage.STATUS_READ]
                 ).count()
@@ -181,7 +183,7 @@ class MonitoringDetailView(APIView):
 
     def get(self, request):
         from datetime import timedelta
-        from messaging.models import OutboundMessage, InboundMessage, ProviderEvent
+        from messaging.models import OutboundMessage, InboundMessage, ProviderEvent, WhatsAppMessage, TelegramMessage
         from bookings.models import Booking
         from messaging.models import Campaign, EmailRecipient
         from monitoring.models import MonitoringAlert
@@ -198,12 +200,25 @@ class MonitoringDetailView(APIView):
             start_date = today
 
         outbound = OutboundMessage.objects.filter(organization=org, created_at__date__gte=start_date)
+        wa_outbound = WhatsAppMessage.objects.filter(organization=org, direction=WhatsAppMessage.DIR_OUTBOUND, created_at__date__gte=start_date)
+        tg_outbound = TelegramMessage.objects.filter(organization=org, direction=TelegramMessage.DIR_OUTBOUND, created_at__date__gte=start_date)
         per_channel = {}
         for channel in ["whatsapp", "email", "telegram", "instagram"]:
-            qs = outbound.filter(channel=channel)
-            total = qs.count()
-            delivered = qs.filter(status__in=[OutboundMessage.STATUS_DELIVERED, OutboundMessage.STATUS_READ]).count()
-            failed = qs.filter(status=OutboundMessage.STATUS_FAILED).count()
+            if channel == "whatsapp":
+                qs = wa_outbound
+                total = qs.count()
+                delivered = qs.filter(status=WhatsAppMessage.STATUS_DELIVERED).count()
+                failed = qs.filter(status=WhatsAppMessage.STATUS_FAILED).count()
+            elif channel == "telegram":
+                qs = tg_outbound
+                total = qs.count()
+                delivered = qs.filter(status="delivered").count()  # placeholder, telegram statuses minimal
+                failed = qs.filter(status__icontains="fail").count()
+            else:
+                qs = outbound.filter(channel=channel)
+                total = qs.count()
+                delivered = qs.filter(status__in=[OutboundMessage.STATUS_DELIVERED, OutboundMessage.STATUS_READ]).count()
+                failed = qs.filter(status=OutboundMessage.STATUS_FAILED).count()
             per_channel[channel] = {
                 "total": total,
                 "delivered": delivered,
@@ -292,10 +307,20 @@ class MonitoringEventsView(APIView):
     def get(self, request):
         from messaging.models import ProviderEvent
         from organizations.utils import get_current_org
+        from datetime import timedelta
 
         org = get_current_org(request)
         limit = int(request.query_params.get("limit", 100))
-        events = ProviderEvent.objects.filter(organization=org).order_by("-received_at")[:limit]
+        today = timezone.now().date()
+        range_param = request.query_params.get("range", "today")
+        if range_param == "7d":
+            start_date = today - timedelta(days=7)
+        elif range_param == "30d":
+            start_date = today - timedelta(days=30)
+        else:
+            start_date = today
+
+        events = ProviderEvent.objects.filter(organization=org, received_at__date__gte=start_date).order_by("-received_at")[:limit]
         data = [
             {
                 "id": event.id,
@@ -317,10 +342,20 @@ class MonitoringAlertsView(APIView):
     def get(self, request):
         from monitoring.models import MonitoringAlert
         from organizations.utils import get_current_org
+        from datetime import timedelta
 
         org = get_current_org(request)
         limit = int(request.query_params.get("limit", 50))
-        alerts = MonitoringAlert.objects.filter(organization=org).order_by("-created_at")[:limit]
+        today = timezone.now().date()
+        range_param = request.query_params.get("range", "today")
+        if range_param == "7d":
+            start_date = today - timedelta(days=7)
+        elif range_param == "30d":
+            start_date = today - timedelta(days=30)
+        else:
+            start_date = today
+
+        alerts = MonitoringAlert.objects.filter(organization=org, created_at__date__gte=start_date).order_by("-created_at")[:limit]
         data = [
             {
                 "id": alert.id,
@@ -334,3 +369,22 @@ class MonitoringAlertsView(APIView):
             for alert in alerts
         ]
         return Response(data)
+
+    def post(self, request):
+        """Acknowledge or resolve an alert."""
+        from monitoring.models import MonitoringAlert
+        from organizations.utils import get_current_org
+
+        org = get_current_org(request)
+        alert_id = request.data.get("id")
+        ack = request.data.get("acknowledge", True)
+        if not alert_id:
+            return Response({"detail": "id required"}, status=400)
+        try:
+            alert = MonitoringAlert.objects.get(id=alert_id, organization=org)
+        except MonitoringAlert.DoesNotExist:
+            return Response({"detail": "Not found"}, status=404)
+        alert.is_acknowledged = bool(ack)
+        alert.acknowledged_at = timezone.now() if ack else None
+        alert.save(update_fields=["is_acknowledged", "acknowledged_at"])
+        return Response({"status": "ok", "is_acknowledged": alert.is_acknowledged})

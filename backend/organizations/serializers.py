@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from .models import Membership, Organization, OrganizationBranding
+from .models import Membership, Organization, OrganizationBranding, UserProfile
 
 
 class OrganizationSerializer(serializers.ModelSerializer):
@@ -45,3 +45,41 @@ class OrganizationBrandingSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(url)
             return url
         return None
+
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    avatar_url = serializers.SerializerMethodField()
+    role = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
+    username = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserProfile
+        fields = ["phone", "avatar_url", "role", "email", "username"]
+        read_only_fields = ["avatar_url", "role", "email", "username"]
+
+    def get_avatar_url(self, obj):
+        request = self.context.get("request")
+        if obj.avatar and hasattr(obj.avatar, "url"):
+            url = obj.avatar.url
+            return request.build_absolute_uri(url) if request else url
+        return None
+
+    def get_role(self, obj):
+        user = obj.user
+        request = self.context.get("request")
+        from organizations.utils import get_current_org
+
+        try:
+            org = get_current_org(request)
+            membership = user.memberships.filter(organization=org).first()
+            return membership.role if membership else None
+        except Exception:
+            membership = user.memberships.first()
+            return membership.role if membership else None
+
+    def get_email(self, obj):
+        return obj.user.email
+
+    def get_username(self, obj):
+        return obj.user.username

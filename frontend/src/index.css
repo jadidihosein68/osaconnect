@@ -710,6 +710,10 @@
     height: calc(var(--spacing) * 24);
   }
 
+  .h-22-3 {
+    height: calc(var(--spacing) * 22.3);
+  }
+
   .h-\[calc\(100\%-1px\)\] {
     height: calc(100% - 1px);
   }

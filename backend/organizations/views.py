@@ -6,8 +6,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 
-from .models import Membership, OrganizationBranding
-from .serializers import MembershipSerializer, OrganizationBrandingSerializer
+from .models import Membership, OrganizationBranding, UserProfile
+from .serializers import MembershipSerializer, OrganizationBrandingSerializer, UserProfileSerializer
 from .utils import get_current_org
 from .permissions import IsOrgMemberWithRole
 
@@ -63,4 +63,29 @@ class BrandingViewSet(viewsets.ViewSet):
         branding.email = data.get("email", branding.email)
         branding.save()
         serializer = OrganizationBrandingSerializer(branding, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class ProfileViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_object(self, request):
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        return profile
+
+    def list(self, request):
+        profile = self.get_object(request)
+        serializer = UserProfileSerializer(profile, context={"request": request})
+        return Response(serializer.data)
+
+    def create(self, request):
+        profile = self.get_object(request)
+        data = request.data
+        if "avatar" in request.FILES:
+            profile.avatar = request.FILES["avatar"]
+        if "phone" in data:
+            profile.phone = data.get("phone") or ""
+        profile.save()
+        serializer = UserProfileSerializer(profile, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)

@@ -17,6 +17,7 @@ import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { useState } from 'react';
 import { NotificationBell } from './notifications/NotificationBell';
+import { ChevronDown } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -29,6 +30,7 @@ interface LayoutProps {
   userName?: string;
   userEmail?: string;
   logoUrl?: string | null;
+  avatarUrl?: string | null;
 }
 
 function getInitials(name?: string) {
@@ -38,8 +40,9 @@ function getInitials(name?: string) {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
-export function Layout({ children, currentScreen, onNavigate, onLogout, organizations = [], currentOrgId, onOrgChange, userName, userEmail, logoUrl }: LayoutProps) {
+export function Layout({ children, currentScreen, onNavigate, onLogout, organizations = [], currentOrgId, onOrgChange, userName, userEmail, logoUrl, avatarUrl }: LayoutProps) {
   const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({ contacts: true });
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const isSubActive = (path: string, subId: string) => {
     if (subId === '/contacts/all-contacts') {
@@ -97,7 +100,7 @@ export function Layout({ children, currentScreen, onNavigate, onLogout, organiza
       <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center overflow-hidden">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden">
               {logoUrl ? (
                 <img src={logoUrl} alt="Logo" className="w-full h-full object-cover" />
               ) : (
@@ -170,7 +173,7 @@ export function Layout({ children, currentScreen, onNavigate, onLogout, organiza
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Bar */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6">
+        <header className="h-22-3 bg-white border-b border-gray-200 flex items-center justify-between px-6">
           <div className="flex-1" />
           <div className="flex items-center gap-4">
             <NotificationBell orgId={currentOrgId} onNavigate={onNavigate} />
@@ -189,23 +192,44 @@ export function Layout({ children, currentScreen, onNavigate, onLogout, organiza
                 </select>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <Avatar className="h-8 w-8">
-                <AvatarFallback>{getInitials(userName)}</AvatarFallback>
-              </Avatar>
-              <div className="text-sm text-gray-800 hidden sm:block">
-                <div className="font-medium">{userName || 'User'}</div>
-                {userEmail && <div className="text-gray-500 text-xs">{userEmail}</div>}
-              </div>
+            <div className="relative">
+              <button
+                onClick={() => setProfileOpen((p) => !p)}
+                className="flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-100"
+              >
+                <Avatar className="h-8 w-8">
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <AvatarFallback>{getInitials(userName)}</AvatarFallback>
+                  )}
+                </Avatar>
+                <div className="text-sm text-gray-800 hidden sm:block text-left">
+                  <div className="font-medium">{userName || 'User'}</div>
+                  {userEmail && <div className="text-gray-500 text-xs">{userEmail}</div>}
+                </div>
+                <ChevronDown className="w-4 h-4 text-gray-500" />
+              </button>
+              {profileOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded shadow z-50">
+                  <button
+                    className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50"
+                    onClick={() => {
+                      setProfileOpen(false);
+                      onNavigate('/profile');
+                    }}
+                  >
+                    View Profile
+                  </button>
+                  <button
+                    className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 text-red-600"
+                    onClick={onLogout}
+                  >
+                    Logout
+                  </button>
+                </div>
+              )}
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onLogout}
-              className="text-gray-600 hover:text-gray-900"
-            >
-              <LogOut className="w-5 h-5" />
-            </Button>
           </div>
         </header>
 

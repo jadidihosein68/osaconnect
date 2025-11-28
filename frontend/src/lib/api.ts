@@ -146,6 +146,14 @@ export interface Branding {
   logo_url?: string | null;
 }
 
+export interface Profile {
+  username?: string;
+  phone: string;
+  avatar_url?: string | null;
+  role?: string | null;
+  email?: string | null;
+}
+
 export interface NotificationSummary {
   unread_count: number;
 }
@@ -314,6 +322,7 @@ export function clearAuth() {
   localStorage.removeItem("corbi_org");
   localStorage.removeItem("corbi_user");
   localStorage.removeItem("corbi_email");
+  localStorage.removeItem("corbi_avatar");
   if (typeof window !== "undefined") {
     sessionStorage.removeItem("corbi_redirect");
   }
@@ -557,6 +566,24 @@ export async function updateBranding(payload: Branding, file?: File): Promise<Br
     form.append("logo", file);
   }
   const { data } = await api.post("/branding/", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+// Profile
+export async function fetchProfile(): Promise<Profile> {
+  const { data } = await api.get("/profile/");
+  return data;
+}
+
+export async function updateProfile(payload: Profile, file?: File): Promise<Profile> {
+  const form = new FormData();
+  form.append("phone", payload.phone || "");
+  if (file) {
+    form.append("avatar", file);
+  }
+  const { data } = await api.post("/profile/", form, {
     headers: { "Content-Type": "multipart/form-data" },
   });
   return data;
