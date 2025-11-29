@@ -10,12 +10,17 @@ def before_all(context):
 
 
 def before_scenario(context, scenario):
-    context.page = context.browser.new_page()
+    # New browser context per scenario to avoid shared localStorage/cookies between scenarios.
+    context.browser_context = context.browser.new_context()
+    context.page = context.browser_context.new_page()
 
 
 def after_scenario(context, scenario):
-    if hasattr(context, "page") and context.page:
-        context.page.close()
+    if getattr(context, "browser_context", None):
+        context.browser_context.close()
+        context.browser_context = None
+    if getattr(context, "page", None):
+        context.page = None
 
 
 def after_all(context):

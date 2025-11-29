@@ -22,8 +22,13 @@ def step_sign_in_custom(context, username, password):
 
 @then("I should see the dashboard")
 def step_see_dashboard(context):
+    # Wait for navigation away from login and for a visible dashboard marker.
     context.page.wait_for_load_state("networkidle")
-    assert "dashboard" in context.page.url.lower() or "Dashboard" in context.page.inner_text("body"), "Dashboard not detected"
+    context.page.wait_for_timeout(1000)
+    body = context.page.inner_text("body").lower()
+    on_login = "login" in context.page.url.lower()
+    has_header = context.page.query_selector("text=Dashboard") or "dashboard" in body
+    assert not on_login and has_header, "Dashboard not detected"
 
 
 @then("I should see a login error message")

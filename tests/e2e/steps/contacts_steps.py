@@ -1,7 +1,8 @@
 import time
-from behave import when, then
+from behave import given, when, then
 
 
+@given("I open the contacts page")
 @when("I open the contacts page")
 def step_open_contacts(context):
     context.page.goto(context.base_url.rstrip("/") + "/contacts/all-contacts")
@@ -59,11 +60,17 @@ def step_create_contact(context, name):
         raise AssertionError("Save/submit button not found")
     submit.click()
 
-    # Wait for success: either toast or row containing the contact name.
-    context.page.wait_for_timeout(300)  # small debounce
-    # Prefer a deterministic check for the new row
-    context.page.wait_for_timeout(700)
-    if not context.page.query_selector(f"text={name}"):
+    # Wait for request/transition
+    context.page.wait_for_load_state("networkidle")
+    context.page.wait_for_timeout(500)
+
+    # Reload the list to ensure the record is persisted, not just in the form.
+    context.page.goto(context.base_url.rstrip("/") + "/contacts/all-contacts")
+    context.page.wait_for_load_state("networkidle")
+    context.page.wait_for_timeout(500)
+
+    table = context.page.query_selector("table") or context.page
+    if not table.query_selector(f"text={name}"):
         body = context.page.inner_text("body")
         raise AssertionError(f"Contact '{name}' not found after creation. Page excerpt: {body[:500]}")
 
