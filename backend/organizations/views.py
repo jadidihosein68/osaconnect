@@ -84,6 +84,8 @@ class ProfileViewSet(viewsets.ViewSet):
         data = request.data
         if "avatar" in request.FILES:
             profile.avatar = request.FILES["avatar"]
+        if "display_name" in data:
+            profile.display_name = data.get("display_name") or ""
         if "phone" in data:
             profile.phone = data.get("phone") or ""
         profile.save()

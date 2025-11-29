@@ -48,6 +48,7 @@ class OrganizationBrandingSerializer(serializers.ModelSerializer):
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    display_name = serializers.CharField(required=False, allow_blank=True)
     avatar_url = serializers.SerializerMethodField()
     role = serializers.SerializerMethodField()
     email = serializers.SerializerMethodField()
@@ -55,7 +56,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserProfile
-        fields = ["phone", "avatar_url", "role", "email", "username"]
+        fields = ["phone", "display_name", "avatar_url", "role", "email", "username"]
         read_only_fields = ["avatar_url", "role", "email", "username"]
 
     def get_avatar_url(self, obj):

@@ -57,6 +57,7 @@ class OrganizationBranding(models.Model):
 
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
+    display_name = models.CharField(max_length=255, blank=True, default="")
     phone = models.CharField(max_length=50, blank=True, default="")
     avatar = models.ImageField(upload_to="profile_avatars/", null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
