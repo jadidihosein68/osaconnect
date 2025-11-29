@@ -223,6 +223,11 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
     navigate(`/contacts/${id}`, { replace: true });
   };
 
+  // Render login page standalone (no sidebar/header) to match landing experience
+  if (location.pathname === '/login') {
+    return <Login onLogin={handleLogin} loading={loadingMemberships} memberships={memberships} />;
+  }
+
   const ContactDetailPage = () => {
     const params = useParams();
     return (

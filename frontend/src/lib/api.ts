@@ -333,11 +333,13 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     const status = error?.response?.status;
+    const path = originalRequest?.url || "";
+    const isAuthEndpoint = path.includes("/api/auth/token");
     const isExpired =
       error?.response?.status === 401 &&
       (error?.response?.data?.code === "token_not_valid" || /expired/i.test(error?.response?.data?.detail || ""));
 
-    if (isExpired && refreshToken && !originalRequest._retry) {
+    if (isExpired && !isAuthEndpoint && refreshToken && !originalRequest._retry) {
       originalRequest._retry = true;
       try {
         const newAccess = await refreshAccessToken();
@@ -352,7 +354,7 @@ api.interceptors.response.use(
         window.location.href = `/login?next=${encodeURIComponent(redirect)}`;
       }
     }
-    if (status === 401) {
+    if (status === 401 && !isAuthEndpoint) {
       clearAuth();
       if (typeof window !== "undefined") {
         const redirect = window.location.pathname + window.location.search;

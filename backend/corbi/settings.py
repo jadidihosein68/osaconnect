@@ -73,11 +73,27 @@ TEMPLATES = [
 WSGI_APPLICATION = "corbi.wsgi.application"
 ASGI_APPLICATION = "corbi.asgi.application"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+def _build_database_config():
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        from django.core.exceptions import ImproperlyConfigured
+
+        raise ImproperlyConfigured("DATABASE_URL is required (PostgreSQL). SQLite fallback is disabled.")
+    from urllib.parse import urlparse
+
+    parsed = urlparse(db_url)
+    return {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": parsed.path.lstrip("/") or "",
+        "USER": parsed.username or "",
+        "PASSWORD": parsed.password or "",
+        "HOST": parsed.hostname or "",
+        "PORT": str(parsed.port) if parsed.port else "",
     }
+
+
+DATABASES = {
+    "default": _build_database_config(),
 }
 
 AUTH_PASSWORD_VALIDATORS = [
