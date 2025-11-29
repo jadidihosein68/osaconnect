@@ -56,7 +56,7 @@ export function Login({ onLogin }: LoginProps) {
   return (
     <div className="min-h-screen w-full grid grid-cols-1 lg:grid-cols-2">
       <div
-        className="min-h-screen text-white px-8 lg:px-12 py-16 lg:py-20 flex justify-center"
+        className="p-6 min-h-screen text-white px-8 lg:px-12 py-16 lg:py-20 flex justify-center"
         style={{
           backgroundImage: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #2563eb 100%)',
         }}
