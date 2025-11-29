@@ -49,11 +49,11 @@ class Contact(models.Model):
 
     organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE, related_name="contacts")
     full_name = models.CharField(max_length=255)
-    phone_whatsapp = models.CharField(max_length=32, blank=True, null=True, unique=True)
+    phone_whatsapp = models.CharField(max_length=32, blank=True, null=True, db_index=True)
     whatsapp_opt_in = models.BooleanField(default=False)
     whatsapp_blocked = models.BooleanField(default=False)
-    email = models.EmailField(blank=True, null=True, unique=True)
-    telegram_chat_id = models.CharField(max_length=64, blank=True, null=True, unique=True)
+    email = models.EmailField(blank=True, null=True, db_index=True)
+    telegram_chat_id = models.CharField(max_length=64, blank=True, null=True, db_index=True)
     TELEGRAM_STATUS_NOT_LINKED = "not_linked"
     TELEGRAM_STATUS_INVITED = "invited"
     TELEGRAM_STATUS_ONBOARDED = "onboarded"
@@ -69,8 +69,8 @@ class Contact(models.Model):
     telegram_invited = models.BooleanField(default=False)
     telegram_onboarded_at = models.DateTimeField(blank=True, null=True)
     telegram_last_invite_at = models.DateTimeField(blank=True, null=True)
-    instagram_scoped_id = models.CharField(max_length=64, blank=True, null=True, unique=True)
-    instagram_user_id = models.CharField(max_length=64, blank=True, null=True, unique=True)
+    instagram_scoped_id = models.CharField(max_length=64, blank=True, null=True, db_index=True)
+    instagram_user_id = models.CharField(max_length=64, blank=True, null=True, db_index=True)
     instagram_opt_in = models.BooleanField(default=False)
     instagram_blocked = models.BooleanField(default=False)
     instagram_last_inbound_at = models.DateTimeField(blank=True, null=True)
@@ -88,6 +88,33 @@ class Contact(models.Model):
 
     class Meta:
         ordering = ["-updated_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "email"],
+                condition=~models.Q(email__isnull=True),
+                name="uniq_contact_email_per_org",
+            ),
+            models.UniqueConstraint(
+                fields=["organization", "phone_whatsapp"],
+                condition=~models.Q(phone_whatsapp__isnull=True),
+                name="uniq_contact_whatsapp_per_org",
+            ),
+            models.UniqueConstraint(
+                fields=["organization", "telegram_chat_id"],
+                condition=~models.Q(telegram_chat_id__isnull=True),
+                name="uniq_contact_telegram_per_org",
+            ),
+            models.UniqueConstraint(
+                fields=["organization", "instagram_scoped_id"],
+                condition=~models.Q(instagram_scoped_id__isnull=True),
+                name="uniq_contact_instagram_scoped_per_org",
+            ),
+            models.UniqueConstraint(
+                fields=["organization", "instagram_user_id"],
+                condition=~models.Q(instagram_user_id__isnull=True),
+                name="uniq_contact_instagram_user_per_org",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.full_name} ({self.status})"
