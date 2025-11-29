@@ -93,3 +93,15 @@ npm run dev  # http://localhost:5173 proxied to backend
 - If 401s occur in the UI, re-login; 401 auto-clears token and redirects.
 - If 500s on list endpoints, ensure migrations ran and backend is up.
 - To bypass throttling in dev, raise `OUTBOUND_PER_MINUTE_LIMIT` or set high value.
+
+## E2E / BDD Tests (Playwright + Behave)
+- Location: `tests/e2e/features/` (PO-owned Gherkin) and `tests/e2e/steps/` (glue), hooks in `tests/e2e/environment.py`.
+- Install once: `pip install -r tests/requirements.txt` then `python -m playwright install`.
+- Run: `behave tests/e2e --tags=@smoke` (smoke), `behave tests/e2e` (full), or a single feature `behave tests/e2e/features/login.feature`.
+- Env vars: set `E2E_BASE_URL=http://localhost:3000`, `E2E_USER=<user>`, `E2E_PASS=<pass>`.
+- Best practices:
+  - Use stable selectors (id/name/data-testid), not brittle text.
+  - Fill all required fields; generate unique data to avoid dedupe clashes.
+  - Wait for clear success signals (toast or new row) and assert; fail on error banners.
+  - Keep steps readable; POs edit only `.feature` files; engineers extend step glue.
+  - Tag fast flows as `@smoke`; deeper cases as `@regression`.

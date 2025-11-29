@@ -166,3 +166,22 @@ python manage.py migrate
 - Use HTTPS for all webhooks.
 - Configure Celery + Redis with non-eager mode for real async sends/retries.
 - Store secrets in env/secret manager, not in VCS.
+
+
+
+
+To run e2e test : 
+Make sure to install requiremenmt, and you should be in an environment 
+
+
+
+
+how to run : 
+
+cd "D:\WS\AI autogenerate\OSAConnect\osaconnect\tests\e2e"
+$env:E2E_BASE_URL="http://localhost:3000"
+$env:E2E_USER="test"
+$env:E2E_PASS="test@corbi"
+behave --tags=@smoke
+
+
