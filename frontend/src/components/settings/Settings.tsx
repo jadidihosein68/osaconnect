@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Upload, CheckCircle, XCircle } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { connectIntegration, disconnectIntegration, fetchIntegrations, fetchBranding, updateBranding, Integration, testIntegration } from '../../lib/api';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 
 export function Settings() {
   const [activeTab, setActiveTab] = useState('branding');
@@ -14,6 +15,7 @@ export function Settings() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [errors, setErrors] = useState<string | null>(null);
+  const [confirmDisconnect, setConfirmDisconnect] = useState<{ open: boolean; provider?: string }>({ open: false });
   const [branding, setBranding] = useState({
     company_name: '',
     address: '',
@@ -118,6 +120,11 @@ export function Settings() {
     setErrors(null);
     const entries = formState[provider] || {};
     const token = entries.token || '';
+    if (!token) {
+      setLoading(false);
+      setErrors('Token is required to connect.');
+      return;
+    }
     const extra = { ...entries };
     delete extra.token;
     try {
@@ -146,6 +153,7 @@ export function Settings() {
       setErrors('Failed to disconnect.');
     } finally {
       setLoading(false);
+      setConfirmDisconnect({ open: false, provider: undefined });
     }
   };
 
@@ -153,12 +161,20 @@ export function Settings() {
     setLoading(true);
     setMessage(null);
     setErrors(null);
+    const integration = integrations.find((i) => i.provider === provider);
     const entries = formState[provider] || {};
-    const token = entries.token || ''; // optional if already saved on server
-    const extra = { ...entries };
-    delete extra.token;
+    const mergedExtra = { ...(integration?.extra || {}), ...entries };
+    // Do not send token unless user provided it; backend will use stored secret
+    const token = entries.token ? entries.token : undefined;
+    delete mergedExtra.token;
+    // If not connected and no token provided, block test
+    if (!integration?.is_active && !token) {
+      setLoading(false);
+      setErrors('Token is required to test connection.');
+      return;
+    }
     try {
-      const res = await testIntegration(provider, { token, extra });
+      const res = await testIntegration(provider, { ...(token ? { token } : {}), extra: mergedExtra });
       setMessage(res.message || 'Test succeeded.');
     } catch {
       setErrors('Test failed.');
@@ -206,11 +222,8 @@ export function Settings() {
         <CardContent className="space-y-4">
           {cfg.fields.map((field) => {
             const isTestField = field.key === 'test_to_number';
-            const shouldHide =
-              isElevenLabs &&
-              status === 'connected' &&
-              !isEditing &&
-              !isTestField; // hide secrets/ids when connected unless editing
+            const hideFields = status === 'connected' && !isEditing;
+            const shouldHide = hideFields && (!isElevenLabs || !isTestField);
             if (shouldHide) return null;
             return (
               <div key={field.key} className="space-y-2">
@@ -219,7 +232,7 @@ export function Settings() {
                   type={field.type || 'text'}
                   value={(formState[provider]?.[field.key] ?? integration?.extra?.[field.key] ?? '') as string}
                   onChange={(e) => handleFieldChange(provider, field.key, e.target.value)}
-                  disabled={status === 'connected' && !isEditing && !isTestField}
+                  disabled={hideFields && !isTestField}
                 />
               </div>
             );
@@ -232,17 +245,57 @@ export function Settings() {
             {status === 'connected' ? (
               <>
                 {isEditing ? (
-                  <Button onClick={() => { handleConnect(provider); setEditing(false); }} disabled={loading}>
-                    Save Changes
-                  </Button>
+                  <>
+                    <Button onClick={() => { handleConnect(provider); setEditing(false); }} disabled={loading}>
+                      Save Changes
+                    </Button>
+                    <Button variant="outline" onClick={() => { setFormState((prev) => ({ ...prev, [provider]: { ...(prev[provider] || {}), __editing: false } })); }} disabled={loading}>
+                      Cancel
+                    </Button>
+                  </>
                 ) : (
                   <Button variant="secondary" onClick={() => setEditing(true)} disabled={loading}>
                     Edit
                   </Button>
                 )}
-                <Button variant="destructive" onClick={() => handleDisconnect(provider)} disabled={loading}>
-                  Disconnect
-                </Button>
+                <Dialog
+                  open={confirmDisconnect.open && confirmDisconnect.provider === provider}
+                  onOpenChange={(open) => setConfirmDisconnect({ open, provider })}
+                >
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="destructive"
+                      onClick={() => setConfirmDisconnect({ open: true, provider })}
+                      disabled={loading}
+                    >
+                      Disconnect
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Disconnect {cfg.name}?</DialogTitle>
+                    </DialogHeader>
+                    <p className="text-sm text-gray-600">
+                      This will disable the integration for this organization. You can reconnect later.
+                    </p>
+                    <DialogFooter className="gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => setConfirmDisconnect({ open: false, provider: undefined })}
+                        disabled={loading}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        onClick={() => confirmDisconnect.provider && handleDisconnect(confirmDisconnect.provider)}
+                        disabled={loading}
+                      >
+                        Yes, Disconnect
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </>
             ) : (
               <Button onClick={() => handleConnect(provider)} disabled={loading}>
