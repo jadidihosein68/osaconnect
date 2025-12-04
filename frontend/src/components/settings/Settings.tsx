@@ -66,6 +66,16 @@ export function Settings() {
         { key: 'calendar_id', label: 'Calendar ID' },
       ],
     },
+    elevenlabs: {
+      name: 'ElevenLabs Voice Agent',
+      fields: [
+        { key: 'token', label: 'API Key', type: 'password' },
+        { key: 'agent_id', label: 'Agent ID' },
+        { key: 'agent_phone_number_id', label: 'Agent Phone Number ID' },
+        { key: 'webhook_secret', label: 'Webhook Secret', type: 'password' },
+        { key: 'test_to_number', label: 'Test To Number (+... )' },
+      ],
+    },
   };
 
   const [formState, setFormState] = useState<Record<string, Record<string, string>>>({});
@@ -144,14 +154,9 @@ export function Settings() {
     setMessage(null);
     setErrors(null);
     const entries = formState[provider] || {};
-    const token = entries.token || '';
+    const token = entries.token || ''; // optional if already saved on server
     const extra = { ...entries };
     delete extra.token;
-    if (!token) {
-      setErrors('Token is required to test connection.');
-      setLoading(false);
-      return;
-    }
     try {
       const res = await testIntegration(provider, { token, extra });
       setMessage(res.message || 'Test succeeded.');
@@ -166,6 +171,16 @@ export function Settings() {
     const integration = integrations.find((i) => i.provider === provider);
     const cfg = providerConfig[provider];
     const status = integration?.is_active ? 'connected' : 'disconnected';
+    const isElevenLabs = provider === 'elevenlabs';
+    const isEditing = formState[provider]?.__editing || false;
+
+    const setEditing = (editing: boolean) => {
+      setFormState((prev) => ({
+        ...prev,
+        [provider]: { ...(prev[provider] || {}), __editing: editing },
+      }));
+    };
+
     return (
       <Card key={provider}>
         <CardHeader>
@@ -189,16 +204,26 @@ export function Settings() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {cfg.fields.map((field) => (
-            <div key={field.key} className="space-y-2">
-              <Label>{field.label}</Label>
-              <Input
-                type={field.type || 'text'}
-                value={(formState[provider]?.[field.key] ?? integration?.extra?.[field.key] ?? '') as string}
-                onChange={(e) => handleFieldChange(provider, field.key, e.target.value)}
-              />
-            </div>
-          ))}
+          {cfg.fields.map((field) => {
+            const isTestField = field.key === 'test_to_number';
+            const shouldHide =
+              isElevenLabs &&
+              status === 'connected' &&
+              !isEditing &&
+              !isTestField; // hide secrets/ids when connected unless editing
+            if (shouldHide) return null;
+            return (
+              <div key={field.key} className="space-y-2">
+                <Label>{field.label}</Label>
+                <Input
+                  type={field.type || 'text'}
+                  value={(formState[provider]?.[field.key] ?? integration?.extra?.[field.key] ?? '') as string}
+                  onChange={(e) => handleFieldChange(provider, field.key, e.target.value)}
+                  disabled={status === 'connected' && !isEditing && !isTestField}
+                />
+              </div>
+            );
+          })}
 
           <div className="flex gap-2 pt-4">
             <Button variant="outline" onClick={() => handleTest(provider)} disabled={loading}>
@@ -206,9 +231,15 @@ export function Settings() {
             </Button>
             {status === 'connected' ? (
               <>
-                <Button onClick={() => handleConnect(provider)} disabled={loading}>
-                  Save Changes
-                </Button>
+                {isEditing ? (
+                  <Button onClick={() => { handleConnect(provider); setEditing(false); }} disabled={loading}>
+                    Save Changes
+                  </Button>
+                ) : (
+                  <Button variant="secondary" onClick={() => setEditing(true)} disabled={loading}>
+                    Edit
+                  </Button>
+                )}
                 <Button variant="destructive" onClick={() => handleDisconnect(provider)} disabled={loading}>
                   Disconnect
                 </Button>

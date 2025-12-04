@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from django.utils import timezone
+from django.conf import settings
 from rest_framework import status
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -16,6 +17,7 @@ from .serializers import IntegrationSerializer
 from .utils import encrypt_token
 
 audit_logger = logging.getLogger("corbi.audit")
+logger = logging.getLogger(__name__)
 
 SUPPORTED_PROVIDERS = {choice[0] for choice in Integration.PROVIDERS}
 
@@ -90,6 +92,10 @@ class IntegrationConnectView(APIView):
             return "Note: chat_id is recommended for Telegram."
         if provider == "google_calendar" and not extra:
             return "Note: calendar metadata not provided."
+        if provider == "elevenlabs":
+            missing = [k for k in ["agent_id", "agent_phone_number_id", "webhook_secret"] if not extra.get(k)]
+            if missing:
+                return f"Note: missing recommended fields: {', '.join(missing)}"
         return None
 
 
@@ -117,3 +123,62 @@ class IntegrationDisconnectView(APIView):
             extra={"provider": provider, "org": org.id, "user": getattr(request.user, "username", "anon"), "result": "disconnected"},
         )
         return Response({"status": "ok", "ok": True, "message": "Disconnected"})
+
+
+class IntegrationTestView(APIView):
+    authentication_classes = [JWTAuthentication, SessionAuthentication, BasicAuthentication]
+    permission_classes = [IsAuthenticated, IsOrgAdmin]
+
+    def post(self, request, provider: str):
+        org = get_current_org(request)
+        try:
+            _validate_provider(provider)
+        except ValueError:
+            return Response({"status": "error", "ok": False, "message": "Unsupported provider"}, status=status.HTTP_400_BAD_REQUEST)
+
+        token = request.data.get("token")
+        extra = request.data.get("extra") or {}
+        if not token:
+            return Response({"status": "error", "ok": False, "message": "token is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if provider == "elevenlabs":
+            return self._test_elevenlabs(token, extra, org, request)
+
+        # Stub/placeholder success for other providers
+        return Response({"status": "ok", "ok": True, "message": "Test succeeded."})
+
+    def _test_elevenlabs(self, token: str, extra: dict, org, request):
+        base_url = getattr(settings, "ELEVENLABS_BASE_URL", "https://api.elevenlabs.io").rstrip("/")
+        to_number = extra.get("test_to_number")
+        agent_id = extra.get("agent_id")
+        phone_id = extra.get("agent_phone_number_id")
+        webhook_secret = extra.get("webhook_secret")
+
+        missing = [k for k in ["agent_id", "agent_phone_number_id", "test_to_number", "webhook_secret"] if not extra.get(k)]
+        if missing:
+            return Response({"status": "error", "ok": False, "message": f"Missing fields: {', '.join(missing)}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        payload = {
+            "agent_id": agent_id,
+            "agent_phone_number_id": phone_id,
+            "to_number": to_number,
+            # Minimal client data; can be extended later.
+        }
+        headers = {"xi-api-key": token, "Content-Type": "application/json"}
+        try:
+            import requests
+
+            resp = requests.post(f"{base_url}/v1/convai/twilio/outbound-call", json=payload, headers=headers, timeout=15)
+            if resp.status_code >= 300:
+                logger.warning(
+                    "elevenlabs.test.failed",
+                    extra={"org": org.id, "status": resp.status_code, "body": resp.text[:500]},
+                )
+                return Response(
+                    {"status": "error", "ok": False, "message": f"Provider returned {resp.status_code}", "body": resp.text[:500]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            return Response({"status": "ok", "ok": True, "message": "Test call initiated."})
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("elevenlabs.test.exception", extra={"org": org.id})
+            return Response({"status": "error", "ok": False, "message": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

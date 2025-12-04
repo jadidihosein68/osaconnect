@@ -13,10 +13,12 @@ from telegram import Bot
 import asyncio
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Email, To, Content
+from django.conf import settings
 
 from organizations.utils import get_current_org
 from organizations.permissions import IsOrgAdmin
 from .views import SUPPORTED_PROVIDERS
+from .utils import decrypt_token
 
 audit_logger = logging.getLogger("corbi.audit")
 
@@ -81,6 +83,30 @@ def _validate_with_provider(provider: str, token: str, extra: dict) -> tuple[boo
             headers["Authorization"] = f"Bearer {token}"
             resp = requests.get("https://www.googleapis.com/calendar/v3/users/me/calendarList", headers=headers, timeout=timeout)
             return (resp.status_code == 200, f"Google Calendar status {resp.status_code}")
+        if provider == "elevenlabs":
+            base_url = getattr(settings, "ELEVENLABS_BASE_URL", "https://api.elevenlabs.io").rstrip("/")
+            agent_id = extra.get("agent_id")
+            phone_id = extra.get("agent_phone_number_id")
+            to_number = extra.get("test_to_number")
+            if not all([agent_id, phone_id, to_number]):
+                return (False, "agent_id, agent_phone_number_id, and test_to_number are required for ElevenLabs test")
+            payload = {
+                "agent_id": agent_id,
+                "agent_phone_number_id": phone_id,
+                "to_number": to_number,
+            }
+            try:
+                resp = requests.post(
+                    f"{base_url}/v1/convai/twilio/outbound-call",
+                    headers={"xi-api-key": token, "Content-Type": "application/json"},
+                    json=payload,
+                    timeout=15,
+                )
+                if resp.status_code < 300:
+                    return (True, "ElevenLabs test call initiated")
+                return (False, f"ElevenLabs status {resp.status_code}: {resp.text[:200]}")
+            except Exception as exc:  # noqa: BLE001
+                return (False, f"ElevenLabs test failed: {exc}")
         return (False, "Unsupported provider")
     except Exception as exc:  # network/JSON errors
         return (False, f"Validation failed: {exc}")
@@ -96,9 +122,24 @@ class IntegrationTestView(APIView):
             return Response({"status": "error", "ok": False, "message": "Unsupported provider"}, status=status.HTTP_400_BAD_REQUEST)
         token = request.data.get("token")
         extra = request.data.get("extra") or {}
+
+        existing = None
         if not token:
-            return Response({"status": "error", "ok": False, "message": "token is required"}, status=status.HTTP_400_BAD_REQUEST)
-        ok, msg = _validate_with_provider(provider, token, extra)
+            from .models import Integration
+
+            existing = Integration.objects.filter(organization=org, provider=provider, is_active=True).first()
+            token = decrypt_token(existing.token_encrypted) if existing else None
+            if not token:
+                return Response({"status": "error", "ok": False, "message": "token is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Merge stored extra with provided overrides
+        if existing is None:
+            from .models import Integration
+            existing = Integration.objects.filter(organization=org, provider=provider, is_active=True).first()
+        stored_extra = (existing.extra if existing else {}) or {}
+        merged_extra = {**stored_extra, **extra}
+
+        ok, msg = _validate_with_provider(provider, token, merged_extra)
         audit_logger.info(
             "integration.test",
             extra={

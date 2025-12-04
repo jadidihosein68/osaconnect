@@ -12,6 +12,7 @@ class Integration(models.Model):
         ("telegram", "Telegram Bot"),
         ("instagram", "Instagram Messaging"),
         ("google_calendar", "Google Calendar"),
+        ("elevenlabs", "ElevenLabs Voice Agent"),
     ]
 
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="integrations")

@@ -83,9 +83,13 @@ The Vite dev server proxies `/api` to `http://localhost:8000`.
 
 ## Provider Integrations (connect via API)
 Use `/api/integrations/{provider}/connect/` with `X-Org-ID` to store tokens (admin role required). Tokens are encrypted at rest.
-- Providers: `sendgrid`, `whatsapp`, `telegram`, `instagram`, `google_calendar`.
+- Providers: `sendgrid`, `whatsapp`, `telegram`, `instagram`, `google_calendar`, `elevenlabs`.
 - Example: `POST /api/integrations/sendgrid/connect/` body: `{"token":"SG.x", "extra":{"from_email":"you@example.com"}}`
 - Disconnect: `DELETE /api/integrations/{provider}/`
+- ElevenLabs Voice Agent:
+  - Fields stored per org: `token` (API key), `agent_id`, `agent_phone_number_id`, `webhook_secret`, `test_to_number`.
+  - Backend base URL configurable via `ELEVENLABS_BASE_URL` (defaults to `https://api.elevenlabs.io`).
+  - Test endpoint: `POST /api/integrations/elevenlabs/test/` triggers a lightweight outbound test call.
 
 ---
 
@@ -183,5 +187,4 @@ $env:E2E_BASE_URL="http://localhost:3000"
 $env:E2E_USER="test"
 $env:E2E_PASS="test@corbi"
 behave --tags=@smoke
-
 

@@ -118,6 +118,9 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Integrations
+ELEVENLABS_BASE_URL = os.getenv("ELEVENLABS_BASE_URL", "https://api.elevenlabs.io")
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
