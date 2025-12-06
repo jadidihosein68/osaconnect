@@ -754,6 +754,10 @@ export async function fetchBookings(): Promise<Booking[]> {
   return data;
 }
 
+export async function deleteBooking(id: number | string): Promise<void> {
+  await api.delete(`/bookings/${id}/`);
+}
+
 export async function fetchBillingLogs(): Promise<BillingLog[]> {
   const { data } = await api.get("/billing/logs/");
   return data;

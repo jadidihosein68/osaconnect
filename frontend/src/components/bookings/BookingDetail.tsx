@@ -5,8 +5,8 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Badge } from '../ui/badge';
-import { ArrowLeft, Save } from 'lucide-react';
-import { fetchBookings, fetchResources, Booking, updateBooking, Resource } from '../../lib/api';
+import { ArrowLeft, Save, Trash2 } from 'lucide-react';
+import { fetchBookings, fetchResources, Booking, updateBooking, Resource, deleteBooking } from '../../lib/api';
 
 interface BookingDetailProps {
   bookingId: string | null;
@@ -94,6 +94,21 @@ export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
     }
   };
 
+  const handleDelete = async () => {
+    if (!booking) return;
+    if (!window.confirm('Delete this booking? This will cancel the calendar entry as well.')) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await deleteBooking(booking.id);
+      onBack();
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || 'Failed to delete booking');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'confirmed':
@@ -141,6 +156,10 @@ export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
                 Edit Booking
               </Button>
             )}
+            <Button variant="destructive" onClick={handleDelete} disabled={loading}>
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </Button>
           </div>
         )}
       </div>
