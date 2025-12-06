@@ -48,14 +48,19 @@ class BookingViewSet(viewsets.ModelViewSet):
     permission_classes = [IsOrgMemberWithRole]
 
     def perform_create(self, serializer):
-        org = serializer.validated_data["contact"].organization
+        org = get_current_org(self.request)
         booking = serializer.save(
             organization=org, created_by_user=self.request.user if self.request.user.is_authenticated else None
         )
         calendar_create(booking)
         audit_logger.info(
             "booking.created",
-            extra={"booking_id": booking.id, "contact_id": booking.contact_id, "org": org.id, "user": getattr(self.request.user, "username", "anon")},
+            extra={
+                "booking_id": booking.id,
+                "contact_id": booking.contact_id,
+                "org": org.id if org else None,
+                "user": getattr(self.request.user, "username", "anon"),
+            },
         )
 
     def get_queryset(self):

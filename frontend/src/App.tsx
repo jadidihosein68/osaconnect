@@ -14,6 +14,7 @@ import { TemplateEditor } from './components/templates/TemplateEditor';
 import { AIAssistant } from './components/ai/AIAssistant';
 import { BookingList } from './components/bookings/BookingList';
 import { BookingDetail } from './components/bookings/BookingDetail';
+import { CreateBookingForm } from './components/bookings/CreateBookingForm';
 import { OutboundLogs } from './components/monitoring/OutboundLogs';
 import { MonitoringDashboard } from './components/monitoring/MonitoringDashboard';
 import { Settings } from './components/settings/Settings';
@@ -249,6 +250,10 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
     return <BookingDetail bookingId={params.id || null} onBack={() => navigate('/bookings')} />;
   };
 
+  const BookingCreatePage = () => {
+    return <CreateBookingForm onCreated={() => navigate('/bookings')} onCancel={() => navigate('/bookings')} />;
+  };
+
   const TemplateEditorWrapper = ({ onBack }: { onBack: () => void }) => {
     const params = useParams();
     return <TemplateEditor templateId={params.id || null} onBack={onBack} onSaved={() => navigate('/templates')} />;
@@ -323,6 +328,7 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
                   path="/bookings"
                   element={<BookingList onViewBooking={(id) => navigate(`/bookings/${id}`)} onCreateBooking={() => navigate('/bookings/new')} />}
                 />
+                <Route path="/bookings/new" element={<BookingCreatePage />} />
                 <Route path="/bookings/:id" element={<BookingDetailPage />} />
                 <Route path="/assistant" element={<AIAssistant />} />
                 <Route path="/monitoring/outbound" element={<OutboundLogs />} />

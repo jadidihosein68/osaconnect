@@ -5,8 +5,8 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Badge } from '../ui/badge';
-import { ArrowLeft, Save, Calendar, Send } from 'lucide-react';
-import { fetchBookings, Booking, updateBooking } from '../../lib/api';
+import { ArrowLeft, Save } from 'lucide-react';
+import { fetchBookings, fetchResources, Booking, updateBooking, Resource } from '../../lib/api';
 
 interface BookingDetailProps {
   bookingId: string | null;
@@ -22,10 +22,13 @@ export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
     title: '',
     start_time: '',
     end_time: '',
-    status: '',
     notes: '',
     location: '',
+    organizer_email: '',
+    resource_id: '' as string,
+    attendee_emails: '' as string,
   });
+  const [resources, setResources] = useState<Resource[]>([]);
 
   useEffect(() => {
     if (!bookingId) return;
@@ -41,9 +44,11 @@ export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
             title: match.title || '',
             start_time: match.start_time ? match.start_time.slice(0, 16) : '',
             end_time: match.end_time ? match.end_time.slice(0, 16) : '',
-            status: match.status || 'pending',
             notes: match.notes || '',
             location: match.location || '',
+            organizer_email: match.organizer_email || '',
+            resource_id: match.resource?.id ? String(match.resource.id) : '',
+            attendee_emails: (match.attendees || []).map((a: any) => a.email).filter(Boolean).join(', '),
           });
         }
         else setError('Booking not found');
@@ -56,6 +61,10 @@ export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
     load();
   }, [bookingId]);
 
+  useEffect(() => {
+    fetchResources().then(setResources).catch(() => {});
+  }, []);
+
   const handleSave = async () => {
     if (!booking) return;
     setError(null);
@@ -63,11 +72,18 @@ export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
     try {
       const updated = await updateBooking(booking.id, {
         title: form.title,
-        start_time: form.start_time,
-        end_time: form.end_time,
-        status: form.status,
+        start_time: form.start_time ? new Date(form.start_time).toISOString() : undefined,
+        end_time: form.end_time ? new Date(form.end_time).toISOString() : undefined,
         notes: form.notes,
         location: form.location,
+        organizer_email: form.organizer_email || undefined,
+        resource_id: form.resource_id ? Number(form.resource_id) : undefined,
+        attendee_emails: form.attendee_emails
+          ? form.attendee_emails
+              .split(',')
+              .map((e) => e.trim())
+              .filter(Boolean)
+          : undefined,
       });
       setBooking({ ...booking, ...updated });
       setIsEditing(false);
@@ -133,16 +149,12 @@ export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
         {/* Booking Details */}
         <div className="lg:col-span-2 space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Booking Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {booking && (
-                <>
-                  <div className="space-y-2">
-                    <Label>Contact</Label>
-                    <Input value={booking.contact?.full_name || ''} disabled />
-                  </div>
+                <CardHeader>
+                  <CardTitle>Booking Information</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {booking && (
+                    <>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Start</Label>
@@ -164,16 +176,43 @@ export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>Status</Label>
+                    <Label>Notes</Label>
+                    <Textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} disabled={!isEditing} rows={4} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Organizer</Label>
                     <Input
-                      value={form.status}
-                      onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
+                      value={form.organizer_email}
+                      onChange={(e) => setForm((f) => ({ ...f, organizer_email: e.target.value }))}
                       disabled={!isEditing}
+                      placeholder="organizer@example.com"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Notes</Label>
-                    <Textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} disabled={!isEditing} rows={4} />
+                    <Label>Resource (for room/device bookings)</Label>
+                    <select
+                      className="w-full border rounded px-3 py-2"
+                      value={form.resource_id}
+                      onChange={(e) => setForm((f) => ({ ...f, resource_id: e.target.value }))}
+                      disabled={!isEditing}
+                    >
+                      <option value="">No resource</option>
+                      {resources.map((r) => (
+                        <option key={r.id} value={String(r.id)}>
+                          {r.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Attendees</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {(booking.attendees || []).map((a, idx) => (
+                        <span key={`${a.email}-${idx}`} className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs">
+                          {a.email}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </>
               )}
@@ -183,25 +222,6 @@ export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
             </CardContent>
           </Card>
 
-          {booking && (
-            <>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Notifications</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <Button className="w-full justify-start" variant="outline">
-                    <Send className="w-4 h-4 mr-2" />
-                    Send Reminder
-                  </Button>
-                  <Button className="w-full justify-start" variant="outline">
-                    <Calendar className="w-4 h-4 mr-2" />
-                    Add to Calendar
-                  </Button>
-                </CardContent>
-              </Card>
-            </>
-          )}
         </div>
 
         {/* Sidebar */}
@@ -227,6 +247,10 @@ export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
                   <div>
                     <div className="text-gray-600 mb-1">External Calendar ID</div>
                     <div className="text-gray-900">{booking.external_calendar_id || '-'}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-600 mb-1">Meeting Type</div>
+                    <div className="text-gray-900 capitalize">{booking.meeting_type}</div>
                   </div>
                   <div>
                     <div className="text-gray-600 mb-1">Location</div>

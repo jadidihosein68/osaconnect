@@ -207,6 +207,7 @@ export interface InboundMessage {
 
 export interface Booking {
   id: number;
+  meeting_type: 'custom' | 'room';
   resource?: Resource | null;
   resource_id?: number | null;
   title: string;
@@ -224,7 +225,7 @@ export interface Booking {
   gcal_sequence?: number | null;
   timezone?: string;
   organizer_email?: string;
-  attendees?: any[];
+  attendees?: { email: string }[];
   recurrence?: string;
   hangout_link?: string;
 }
@@ -788,16 +789,18 @@ export async function fetchMetrics(): Promise<Record<string, number>> {
 }
 
 export async function createBooking(payload: {
-  contact_id: number;
+  meeting_type: 'custom' | 'room';
   title: string;
   start_time: string;
   end_time: string;
-  status?: string;
   notes?: string;
   location?: string;
   resource_id?: number | null;
   organizer_email?: string;
-  attendees?: any[];
+  attendee_emails?: string[];
+  contact_ids?: number[];
+  group_ids?: number[];
+  timezone?: string;
 }) {
   const { data } = await api.post("/bookings/", payload);
   return data;
@@ -809,12 +812,12 @@ export async function updateBooking(
     title: string;
     start_time: string;
     end_time: string;
-    status: string;
     notes: string;
     location: string;
     resource_id: number | null;
     organizer_email: string;
-    attendees: any[];
+    attendee_emails: string[];
+    meeting_type: 'custom' | 'room';
   }>,
 ) {
   const { data } = await api.patch(`/bookings/${id}/`, payload);

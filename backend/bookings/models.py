@@ -34,6 +34,9 @@ class Resource(models.Model):
 
 class Booking(models.Model):
     organization = models.ForeignKey("organizations.Organization", on_delete=models.CASCADE, related_name="bookings")
+    TYPE_CUSTOM = "custom"
+    TYPE_ROOM = "room"
+    TYPE_CHOICES = [(TYPE_CUSTOM, "Custom"), (TYPE_ROOM, "Room/Device")]
     STATUS_PENDING = "pending"
     STATUS_CONFIRMED = "confirmed"
     STATUS_CANCELLED = "cancelled"
@@ -45,7 +48,8 @@ class Booking(models.Model):
         (STATUS_RESCHEDULED, "Rescheduled"),
     ]
 
-    contact = models.ForeignKey(Contact, on_delete=models.CASCADE, related_name="bookings")
+    meeting_type = models.CharField(max_length=16, choices=TYPE_CHOICES, default=TYPE_CUSTOM)
+    contact = models.ForeignKey(Contact, on_delete=models.SET_NULL, null=True, blank=True, related_name="bookings")
     resource = models.ForeignKey(Resource, on_delete=models.SET_NULL, null=True, blank=True, related_name="bookings")
     title = models.CharField(max_length=180)
     start_time = models.DateTimeField()
