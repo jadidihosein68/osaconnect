@@ -50,17 +50,22 @@ export function CreateBookingForm({ onCreated }: Props) {
             .filter(Boolean)
             .map((email) => ({ email }))
         : [];
+      const startIso = new Date(start).toISOString();
+      const endIso = new Date(end).toISOString();
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+
       await createBooking({
         contact_id: Number(contactId),
         title,
-        start_time: start,
-        end_time: end,
+        start_time: startIso,
+        end_time: endIso,
         status,
         notes,
         location,
         resource_id: resourceId && resourceId !== 'none' ? Number(resourceId) : null,
         organizer_email: organizerEmail || undefined,
         attendees: attendeesList,
+        timezone: tz,
       });
       setSuccess('Booking created.');
       setTitle('');
