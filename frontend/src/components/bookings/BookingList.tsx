@@ -5,8 +5,9 @@ import { Badge } from '../ui/badge';
 import { Plus, Eye, Calendar as CalendarIcon } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { fetchBookings, Booking } from '../../lib/api';
+import { fetchBookings, fetchResources, Booking, Resource } from '../../lib/api';
 import { CreateBookingForm } from './CreateBookingForm';
+import { BookingCalendar } from './BookingCalendar';
 
 interface BookingListProps {
   onViewBooking: (id: string) => void;
@@ -20,14 +21,17 @@ export function BookingList({ onViewBooking, onCreateBooking }: BookingListProps
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [resourceFilter, setResourceFilter] = useState<string>('all');
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       setError(null);
       try {
-        const data = await fetchBookings();
+        const [data, resData] = await Promise.all([fetchBookings(), fetchResources()]);
         setBookings(data);
+        setResources(resData);
       } catch {
         setError('Failed to load bookings');
       } finally {
@@ -43,13 +47,14 @@ export function BookingList({ onViewBooking, onCreateBooking }: BookingListProps
         const matchesStatus = statusFilter === 'all' ? true : b.status === statusFilter;
         const target = (b.contact?.full_name || '') + (b.title || '');
         const matchesSearch = target.toLowerCase().includes(search.toLowerCase());
-        return matchesStatus && matchesSearch;
+        const matchesResource = resourceFilter === 'all' ? true : b.resource?.id === Number(resourceFilter);
+        return matchesStatus && matchesSearch && matchesResource;
       }).sort((a, b) => {
         const aDate = new Date(a.start_time).getTime();
         const bDate = new Date(b.start_time).getTime();
         return sortOrder === 'asc' ? aDate - bDate : bDate - aDate;
       }),
-    [bookings, search, statusFilter, sortOrder],
+    [bookings, search, statusFilter, sortOrder, resourceFilter],
   );
 
   const getStatusColor = (status: string) => {
@@ -85,43 +90,14 @@ export function BookingList({ onViewBooking, onCreateBooking }: BookingListProps
         fetchBookings().then(setBookings).catch(() => setError('Failed to load bookings')).finally(() => setLoading(false));
       }} />
 
-      {/* Calendar View (Simplified) */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <CalendarIcon className="w-5 h-5" />
-              November 2024
-            </CardTitle>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm">Previous</Button>
-              <Button variant="outline" size="sm">Next</Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-7 gap-2">
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-              <div key={day} className="text-center text-gray-600 py-2">
-                {day}
-              </div>
-            ))}
-            {Array.from({ length: 30 }, (_, i) => i + 1).map((day) => (
-              <div
-                key={day}
-                className={`aspect-square border rounded-lg p-2 text-center ${
-                  day === 18 ? 'bg-indigo-50 border-indigo-300' : 'bg-white'
-                }`}
-              >
-                <div className="text-gray-900">{day}</div>
-                {(day === 18 || day === 19) && (
-                  <div className="w-1 h-1 bg-indigo-600 rounded-full mx-auto mt-1"></div>
-                )}
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Calendar View */}
+      <BookingCalendar
+        bookings={resourceFilter === 'all' ? bookings : filtered}
+        onCreateForDate={(iso) => {
+          // open the create form prefilled? fallback to default create handler
+          onCreateBooking();
+        }}
+      />
 
       {/* Bookings Table */}
       <Card>
@@ -162,12 +138,26 @@ export function BookingList({ onViewBooking, onCreateBooking }: BookingListProps
                   <SelectItem value="desc">Latest first</SelectItem>
                 </SelectContent>
               </Select>
+              <Select value={resourceFilter} onValueChange={setResourceFilter}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Resource" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All resources</SelectItem>
+                  {resources.map((r) => (
+                    <SelectItem key={r.id} value={String(r.id)}>
+                      {r.name} ({r.resource_type})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200">
                   <th className="text-left py-3 px-4 text-gray-600">Contact</th>
                   <th className="text-left py-3 px-4 text-gray-600">Service</th>
+                  <th className="text-left py-3 px-4 text-gray-600">Resource</th>
                   <th className="text-left py-3 px-4 text-gray-600">Date</th>
                   <th className="text-left py-3 px-4 text-gray-600">Time</th>
                   <th className="text-left py-3 px-4 text-gray-600">Status</th>
@@ -180,6 +170,7 @@ export function BookingList({ onViewBooking, onCreateBooking }: BookingListProps
                   <tr key={booking.id} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="py-3 px-4 text-gray-900">{booking.contact?.full_name || '-'}</td>
                     <td className="py-3 px-4 text-gray-600">{booking.title}</td>
+                    <td className="py-3 px-4 text-gray-600">{booking.resource?.name || '-'}</td>
                     <td className="py-3 px-4 text-gray-600">{new Date(booking.start_time).toLocaleDateString()}</td>
                     <td className="py-3 px-4 text-gray-600">{new Date(booking.start_time).toLocaleTimeString()}</td>
                     <td className="py-3 px-4">
@@ -196,6 +187,17 @@ export function BookingList({ onViewBooking, onCreateBooking }: BookingListProps
                       >
                         <Eye className="w-4 h-4" />
                       </Button>
+                      {booking.hangout_link && (
+                        <a
+                          href={booking.hangout_link}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center justify-center text-indigo-600 hover:text-indigo-800 ml-2"
+                          title="Open in Google Calendar"
+                        >
+                          <CalendarIcon className="w-4 h-4" />
+                        </a>
+                      )}
                     </td>
                   </tr>
                 ))}

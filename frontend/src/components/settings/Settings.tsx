@@ -6,7 +6,7 @@ import { Label } from '../ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Upload, CheckCircle, XCircle } from 'lucide-react';
 import { Badge } from '../ui/badge';
-import { connectIntegration, disconnectIntegration, fetchIntegrations, fetchBranding, updateBranding, Integration, testIntegration } from '../../lib/api';
+import { connectIntegration, disconnectIntegration, fetchIntegrations, fetchBranding, updateBranding, Integration, testIntegration, startGoogleIntegration } from '../../lib/api';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 
 export function Settings() {
@@ -64,8 +64,11 @@ export function Settings() {
     google_calendar: {
       name: 'Calendar Integration (Google)',
       fields: [
-        { key: 'token', label: 'OAuth Token', type: 'password' },
+        { key: 'client_id', label: 'Client ID' },
+        { key: 'client_secret', label: 'Client Secret', type: 'password' },
         { key: 'calendar_id', label: 'Calendar ID' },
+        { key: 'organizer_email', label: 'Organizer Email (from)' },
+        { key: 'target_email', label: 'Target Email (to)' },
       ],
     },
     elevenlabs: {
@@ -118,7 +121,41 @@ export function Settings() {
     setLoading(true);
     setMessage(null);
     setErrors(null);
+    const integration = integrations.find((i) => i.provider === provider);
     const entries = formState[provider] || {};
+    if (provider === 'google_calendar') {
+      const merged = {
+        ...(integration?.extra || {}),
+        ...entries,
+      };
+      const client_id = merged.client_id;
+      const client_secret = merged.client_secret;
+      const calendar_id = merged.calendar_id;
+      const organizer_email = merged.organizer_email;
+      if (!client_id || !client_secret || !organizer_email) {
+        setLoading(false);
+        setErrors('Client ID, Client Secret, and Organizer Email are required.');
+        return;
+      }
+      try {
+        const res = await startGoogleIntegration({
+          client_id,
+          client_secret,
+          calendar_id,
+          organizer_email,
+        });
+        if (res?.auth_url) {
+          window.location.href = res.auth_url;
+          return;
+        }
+        setMessage(res?.message || 'Follow the Google consent to finish connection.');
+      } catch (e) {
+        setErrors('Failed to start Google OAuth.');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     const token = entries.token || '';
     if (!token) {
       setLoading(false);
@@ -163,12 +200,20 @@ export function Settings() {
     setErrors(null);
     const integration = integrations.find((i) => i.provider === provider);
     const entries = formState[provider] || {};
-    const mergedExtra = { ...(integration?.extra || {}), ...entries };
+    const mergedExtra =
+      provider === 'google_calendar'
+        ? { ...entries } // avoid sending redacted stored fields; backend will use stored tokens
+        : { ...(integration?.extra || {}), ...entries };
     // Do not send token unless user provided it; backend will use stored secret
     const token = entries.token ? entries.token : undefined;
     delete mergedExtra.token;
     // If not connected and no token provided, block test
-    if (!integration?.is_active && !token) {
+    if (provider === 'google_calendar' && !integration?.is_active) {
+      setLoading(false);
+      setErrors('Please connect Google Calendar via OAuth before testing.');
+      return;
+    }
+    if (provider !== 'google_calendar' && !integration?.is_active && !token) {
       setLoading(false);
       setErrors('Token is required to test connection.');
       return;
@@ -176,8 +221,10 @@ export function Settings() {
     try {
       const res = await testIntegration(provider, { ...(token ? { token } : {}), extra: mergedExtra });
       setMessage(res.message || 'Test succeeded.');
-    } catch {
-      setErrors('Test failed.');
+
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || 'Test failed.';
+      setErrors(msg);
     } finally {
       setLoading(false);
     }
@@ -222,8 +269,9 @@ export function Settings() {
         <CardContent className="space-y-4">
           {cfg.fields.map((field) => {
             const isTestField = field.key === 'test_to_number';
+            const isCalendarTarget = provider === 'google_calendar' && field.key === 'target_email';
             const hideFields = status === 'connected' && !isEditing;
-            const shouldHide = hideFields && (!isElevenLabs || !isTestField);
+            const shouldHide = hideFields && (!isElevenLabs || !isTestField) && !isCalendarTarget;
             if (shouldHide) return null;
             return (
               <div key={field.key} className="space-y-2">
@@ -232,7 +280,7 @@ export function Settings() {
                   type={field.type || 'text'}
                   value={(formState[provider]?.[field.key] ?? integration?.extra?.[field.key] ?? '') as string}
                   onChange={(e) => handleFieldChange(provider, field.key, e.target.value)}
-                  disabled={hideFields && !isTestField}
+                  disabled={hideFields && !isTestField && !isCalendarTarget}
                 />
               </div>
             );

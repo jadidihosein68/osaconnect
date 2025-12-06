@@ -207,6 +207,8 @@ export interface InboundMessage {
 
 export interface Booking {
   id: number;
+  resource?: Resource | null;
+  resource_id?: number | null;
   title: string;
   start_time: string;
   end_time: string;
@@ -214,6 +216,27 @@ export interface Booking {
   contact: Contact | null;
   notes?: string;
   location?: string;
+  external_calendar_id?: string;
+  gcal_event_id?: string;
+  gcal_calendar_id?: string;
+  gcal_ical_uid?: string;
+  gcal_etag?: string;
+  gcal_sequence?: number | null;
+  timezone?: string;
+  organizer_email?: string;
+  attendees?: any[];
+  recurrence?: string;
+  hangout_link?: string;
+}
+
+export interface Resource {
+  id: number;
+  name: string;
+  resource_type: string;
+  capacity?: number | null;
+  description?: string;
+  gcal_calendar_id?: string;
+  is_active: boolean;
 }
 
 export interface BillingLog {
@@ -764,13 +787,42 @@ export async function fetchMetrics(): Promise<Record<string, number>> {
   return data;
 }
 
-export async function createBooking(payload: { contact_id: number; title: string; start_time: string; end_time: string; status?: string; notes?: string; location?: string }) {
+export async function createBooking(payload: {
+  contact_id: number;
+  title: string;
+  start_time: string;
+  end_time: string;
+  status?: string;
+  notes?: string;
+  location?: string;
+  resource_id?: number | null;
+  organizer_email?: string;
+  attendees?: any[];
+}) {
   const { data } = await api.post("/bookings/", payload);
   return data;
 }
 
-export async function updateBooking(id: number, payload: Partial<{ title: string; start_time: string; end_time: string; status: string; notes: string; location: string }>) {
+export async function updateBooking(
+  id: number,
+  payload: Partial<{
+    title: string;
+    start_time: string;
+    end_time: string;
+    status: string;
+    notes: string;
+    location: string;
+    resource_id: number | null;
+    organizer_email: string;
+    attendees: any[];
+  }>,
+) {
   const { data } = await api.patch(`/bookings/${id}/`, payload);
+  return data;
+}
+
+export async function fetchResources(): Promise<Resource[]> {
+  const { data } = await api.get("/resources/");
   return data;
 }
 
@@ -812,6 +864,11 @@ export async function fetchIntegrations(): Promise<Integration[]> {
 
 export async function connectIntegration(provider: string, payload: { token: string; extra?: Record<string, any> }) {
   const { data } = await api.post(`/integrations/${provider}/connect/`, payload);
+  return data;
+}
+
+export async function startGoogleIntegration(payload: { client_id: string; client_secret: string; calendar_id?: string; organizer_email: string }) {
+  const { data } = await api.post(`/integrations/google/start/`, payload);
   return data;
 }
 

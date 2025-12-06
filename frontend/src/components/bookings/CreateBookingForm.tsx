@@ -5,7 +5,7 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Textarea } from '../ui/textarea';
-import { fetchContacts, createBooking, Contact } from '../../lib/api';
+import { fetchContacts, createBooking, fetchResources, Contact, Resource } from '../../lib/api';
 
 interface Props {
   onCreated: () => void;
@@ -20,12 +20,17 @@ export function CreateBookingForm({ onCreated }: Props) {
   const [status, setStatus] = useState('pending');
   const [notes, setNotes] = useState('');
   const [location, setLocation] = useState('');
+  const [resourceId, setResourceId] = useState<string>('none');
+  const [organizerEmail, setOrganizerEmail] = useState('');
+  const [attendees, setAttendees] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resources, setResources] = useState<Resource[]>([]);
 
   useEffect(() => {
     fetchContacts().then(setContacts).catch(() => setError('Failed to load contacts'));
+    fetchResources().then(setResources).catch(() => {});
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -38,6 +43,13 @@ export function CreateBookingForm({ onCreated }: Props) {
     }
     setLoading(true);
     try {
+      const attendeesList = attendees
+        ? attendees
+            .split(',')
+            .map((a) => a.trim())
+            .filter(Boolean)
+            .map((email) => ({ email }))
+        : [];
       await createBooking({
         contact_id: Number(contactId),
         title,
@@ -46,6 +58,9 @@ export function CreateBookingForm({ onCreated }: Props) {
         status,
         notes,
         location,
+        resource_id: resourceId && resourceId !== 'none' ? Number(resourceId) : null,
+        organizer_email: organizerEmail || undefined,
+        attendees: attendeesList,
       });
       setSuccess('Booking created.');
       setTitle('');
@@ -53,6 +68,9 @@ export function CreateBookingForm({ onCreated }: Props) {
       setEnd('');
       setNotes('');
       setLocation('');
+      setOrganizerEmail('');
+      setAttendees('');
+      setResourceId('');
       setStatus('pending');
       setContactId('');
       onCreated();
@@ -104,6 +122,22 @@ export function CreateBookingForm({ onCreated }: Props) {
             </div>
           </div>
           <div className="space-y-1">
+            <Label>Resource (Room/Device)</Label>
+              <Select value={resourceId} onValueChange={setResourceId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Optional resource" />
+                </SelectTrigger>
+                <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {resources.map((r) => (
+                  <SelectItem key={r.id} value={String(r.id)}>
+                    {r.name} ({r.resource_type})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
             <Label>Title</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} required />
           </div>
@@ -120,6 +154,14 @@ export function CreateBookingForm({ onCreated }: Props) {
           <div className="space-y-1">
             <Label>Location</Label>
             <Input value={location} onChange={(e) => setLocation(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label>Organizer Email (optional)</Label>
+            <Input value={organizerEmail} onChange={(e) => setOrganizerEmail(e.target.value)} placeholder="organizer@example.com" />
+          </div>
+          <div className="space-y-1">
+            <Label>Attendees (comma separated emails)</Label>
+            <Input value={attendees} onChange={(e) => setAttendees(e.target.value)} placeholder="guest1@example.com, guest2@example.com" />
           </div>
           <div className="space-y-1">
             <Label>Notes</Label>

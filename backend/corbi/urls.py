@@ -8,7 +8,7 @@ from rest_framework import routers
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from assistant.views import AssistantView
-from bookings.views import BookingViewSet
+from bookings.views import BookingViewSet, ResourceViewSet
 from contacts.views import ContactViewSet, ContactGroupViewSet
 from messaging.views import InboundMessageViewSet, OutboundMessageViewSet, EmailJobViewSet, EmailAttachmentViewSet, unsubscribe, TelegramOnboardingViewSet, TelegramOnboardWebhook, TelegramMessageViewSet, WhatsAppMessageViewSet, TwilioWhatsAppWebhook, TwilioWhatsAppStatusWebhook, InstagramMessageViewSet, InstagramWebhook, CampaignViewSet
 from notifications.views import NotificationViewSet
@@ -17,7 +17,7 @@ from organizations.views import MembershipViewSet, BrandingViewSet, ProfileViewS
 from templates_app.views import MessageTemplateViewSet
 from messaging.webhooks import InboundWebhookView
 from messaging.callbacks import ProviderCallbackView, SendGridEventView
-from integrations.views import IntegrationListView, IntegrationConnectView, IntegrationDisconnectView
+from integrations.views import IntegrationListView, IntegrationConnectView, IntegrationDisconnectView, GoogleOAuthStartView, GoogleOAuthCallbackView
 from integrations.test import IntegrationTestView
 from billing.views import BillingLogViewSet
 
@@ -31,6 +31,7 @@ router.register(r"email-jobs", EmailJobViewSet, basename="email-job")
 router.register(r"email-attachments", EmailAttachmentViewSet, basename="email-attachment")
 router.register(r"telegram/attachments", EmailAttachmentViewSet, basename="telegram-attachment")
 router.register(r"bookings", BookingViewSet, basename="booking")
+router.register(r"resources", ResourceViewSet, basename="resource")
 router.register(r"memberships", MembershipViewSet, basename="membership")
 router.register(r"branding", BrandingViewSet, basename="branding")
 router.register(r"profile", ProfileViewSet, basename="profile")
@@ -69,6 +70,8 @@ urlpatterns = [
     path("api/integrations/<str:provider>/connect/", IntegrationConnectView.as_view(), name="integration-connect"),
     path("api/integrations/<str:provider>/", IntegrationDisconnectView.as_view(), name="integration-disconnect"),
     path("api/integrations/<str:provider>/test/", IntegrationTestView.as_view(), name="integration-test"),
+    path("api/integrations/google/start/", GoogleOAuthStartView.as_view(), name="integration-google-start"),
+    path("api/integrations/google/callback/", GoogleOAuthCallbackView.as_view(), name="integration-google-callback"),
 ]
 
 # Serve media in development

@@ -1,20 +1,46 @@
 from __future__ import annotations
 
 from rest_framework import filters, viewsets
+from rest_framework.permissions import SAFE_METHODS
 from rest_framework.permissions import IsAuthenticated
 
-from organizations.permissions import IsOrgMemberWithRole
+from organizations.permissions import IsOrgMemberWithRole, IsOrgAdmin
 from organizations.utils import get_current_org
-from .models import Booking
-from .serializers import BookingSerializer
+from .models import Booking, Resource
+from .serializers import BookingSerializer, ResourceSerializer
 from .services import calendar_create, calendar_update, calendar_cancel
 import logging
 
 audit_logger = logging.getLogger("corbi.audit")
 
 
+class ResourceViewSet(viewsets.ModelViewSet):
+    serializer_class = ResourceSerializer
+    permission_classes = [IsOrgAdmin]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["name", "gcal_calendar_id"]
+    ordering_fields = ["name", "resource_type", "created_at"]
+
+    def get_permissions(self):
+        if self.request.method in SAFE_METHODS:
+            return [IsOrgMemberWithRole()]
+        return super().get_permissions()
+
+    def get_queryset(self):
+        org = get_current_org(self.request)
+        return Resource.objects.filter(organization=org)
+
+    def perform_create(self, serializer):
+        org = get_current_org(self.request)
+        serializer.save(organization=org)
+
+    def perform_update(self, serializer):
+        org = get_current_org(self.request)
+        serializer.save(organization=org)
+
+
 class BookingViewSet(viewsets.ModelViewSet):
-    queryset = Booking.objects.select_related("contact").all()
+    queryset = Booking.objects.select_related("contact", "resource").all()
     serializer_class = BookingSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["title", "contact__full_name", "contact__email"]
@@ -34,7 +60,11 @@ class BookingViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         org = get_current_org(self.request)
-        return super().get_queryset().filter(organization=org)
+        qs = super().get_queryset().filter(organization=org)
+        resource_id = self.request.query_params.get("resource")
+        if resource_id:
+            qs = qs.filter(resource_id=resource_id)
+        return qs
 
     def perform_update(self, serializer):
         booking = serializer.save()

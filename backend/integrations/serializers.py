@@ -14,9 +14,16 @@ class IntegrationSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
     def get_extra(self, obj):
-        # Do not expose secrets in API responses
         extra = (obj.extra or {}).copy()
-        for key in ["token", "api_key", "webhook_secret"]:
+        for key in [
+            "token",
+            "api_key",
+            "webhook_secret",
+            "client_secret",
+            "client_secret_encrypted",
+            "access_token_encrypted",
+            "refresh_token_encrypted",
+        ]:
             if key in extra:
                 extra[key] = "••••"
         return extra
