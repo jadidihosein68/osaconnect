@@ -3,6 +3,7 @@ import { Calendar as BigCalendar, Views, dateFnsLocalizer, SlotInfo, Event as RB
 import { format, parse, startOfWeek, getDay } from 'date-fns';
 import { enUS } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
+import './BookingCalendar.css';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import type { Booking } from '../../lib/api';
@@ -63,31 +64,24 @@ export function BookingCalendar({ bookings, onCreateForDate }: BookingCalendarPr
           Calendar (week/day/month)
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <style>{`
-          .rbc-day-bg:hover,
-          .rbc-time-slot:hover,
-          .rbc-date-cell:hover,
-          .rbc-month-row:hover {
-            background-color: #eef2ff !important;
-            cursor: pointer;
-          }
-        `}</style>
-        <div className="h-[650px] rounded border bg-white">
+      <CardContent className="px-5">
+        <div className="h-[calc(100vh-220px)] min-h-[600px] bg-white rounded-b-lg overflow-hidden">
           <BigCalendar
             localizer={localizer}
             events={events}
             defaultView={Views.WEEK}
-            views={[Views.MONTH, Views.WEEK, Views.DAY, Views.AGENDA]}
+            views={[Views.MONTH, Views.WEEK, Views.DAY]}
+            step={60}
+            timeslots={1}
             popup
             selectable={!!onCreateForDate}
             onSelectSlot={handleSelectSlot}
             eventPropGetter={(event) => {
-              let backgroundColor = '#4f46e5';
-              if (event.status === 'confirmed') backgroundColor = '#16a34a';
-              if (event.status === 'pending') backgroundColor = '#f97316';
-              if (event.status === 'cancelled') backgroundColor = '#ef4444';
-              return { style: { backgroundColor, borderRadius: 8, color: 'white', border: 'none' } };
+              let backgroundColor = '#039be5'; // Google Calendar Blue
+              if (event.status === 'confirmed') backgroundColor = '#0b8043'; // Google Green
+              if (event.status === 'pending') backgroundColor = '#f9ab00'; // Google Yellow
+              if (event.status === 'cancelled') backgroundColor = '#d93025'; // Google Red
+              return { style: { backgroundColor, color: 'white' } };
             }}
             tooltipAccessor={(event) =>
               `${event.title}\n${event.organizer || ''}${event.resource ? ' • ' + event.resource : ''}\n${format(event.start as Date, 'PPpp')} - ${format(event.end as Date, 'PPpp')}`
