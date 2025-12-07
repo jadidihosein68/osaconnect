@@ -64,7 +64,7 @@ export function BookingCalendar({ bookings, onCreateForDate }: BookingCalendarPr
           Calendar (week/day/month)
         </CardTitle>
       </CardHeader>
-      <CardContent className="px-5">
+      <CardContent className="px-6">
         <div className="h-[calc(100vh-220px)] min-h-[600px] bg-white rounded-b-lg overflow-hidden">
           <BigCalendar
             localizer={localizer}
