@@ -483,7 +483,6 @@ curl --request POST \
 
 Body : 
 
-
 Path Parameters
 field name :​bookingUid
 field type :string 

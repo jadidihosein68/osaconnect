@@ -90,7 +90,6 @@ class PublicBookingCreateSerializer(serializers.Serializer):
 
 class PublicRescheduleSerializer(serializers.Serializer):
     start = serializers.DateTimeField()
-    lengthInMinutes = serializers.IntegerField(required=False)
     rescheduledBy = serializers.EmailField(required=False)
     reschedulingReason = serializers.CharField(required=False)
     emailVerificationCode = serializers.CharField(required=False)
@@ -282,6 +281,8 @@ class PublicBookingRescheduleView(APIView):
         booking = _get_booking_by_uid(org, booking_uid)
         if not booking:
             return Response({"status": "error", "message": "Booking not found"}, status=status.HTTP_404_NOT_FOUND)
+        if booking.status == Booking.STATUS_CANCELLED:
+            return Response({"status": "error", "message": "Cannot reschedule a cancelled booking"}, status=status.HTTP_400_BAD_REQUEST)
         body = request.data or {}
         start = body.get("start")
         if not start:
@@ -290,13 +291,18 @@ class PublicBookingRescheduleView(APIView):
             start_dt = timezone.datetime.fromisoformat(start)
         except Exception:
             return Response({"status": "error", "message": "Invalid start"}, status=status.HTTP_400_BAD_REQUEST)
-        length = body.get("lengthInMinutes")
-        end_dt = booking.end_time
-        if length:
-            end_dt = start_dt + timedelta(minutes=int(length))
-        elif booking.end_time and booking.start_time:
+        tz_str = booking.timezone or "UTC"
+        try:
+            tzinfo = ZoneInfo(tz_str)
+        except Exception:
+            tzinfo = timezone.utc
+        # Treat provided start as wall-clock in the booking's stored timezone (ignore incoming offset)
+        start_dt = start_dt.replace(tzinfo=tzinfo)
+        if booking.end_time and booking.start_time:
             delta = booking.end_time - booking.start_time
             end_dt = start_dt + delta
+        else:
+            end_dt = start_dt + timedelta(minutes=30)
         booking.start_time = start_dt
         booking.end_time = end_dt
         booking.status = Booking.STATUS_RESCHEDULED
@@ -356,11 +362,16 @@ class PublicSlotsView(APIView):
         if not start or not end:
             return Response({"status": "error", "message": "start and end are required"}, status=status.HTTP_400_BAD_REQUEST)
         duration = int(request.query_params.get("duration") or 60)
-        try:
-            start_dt = timezone.datetime.fromisoformat(start)
-            end_dt = timezone.datetime.fromisoformat(end)
-        except Exception:
+        start_dt = parse_datetime(start)
+        end_dt = parse_datetime(end)
+        if start_dt is None or end_dt is None:
             return Response({"status": "error", "message": "Invalid start or end"}, status=status.HTTP_400_BAD_REQUEST)
+        if start_dt.tzinfo is None:
+            start_dt = start_dt.replace(tzinfo=timezone.utc)
+        if end_dt.tzinfo is None:
+            end_dt = end_dt.replace(tzinfo=timezone.utc)
+        if start_dt >= end_dt:
+            return Response({"status": "error", "message": "start must be before end"}, status=status.HTTP_400_BAD_REQUEST)
         busy = list(
             Booking.objects.filter(organization=org, start_time__lt=end_dt, end_time__gt=start_dt).values(
                 "start_time", "end_time"

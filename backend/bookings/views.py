@@ -11,7 +11,7 @@ from organizations.permissions import IsOrgMemberWithRole, IsOrgAdmin
 from organizations.utils import get_current_org
 from .models import Booking, Resource
 from .serializers import BookingSerializer, ResourceSerializer
-from .services import calendar_create, calendar_update, calendar_cancel
+from .services import calendar_create, calendar_update, calendar_cancel, calendar_delete
 import logging
 
 audit_logger = logging.getLogger("corbi.audit")
@@ -89,7 +89,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         )
 
     def perform_destroy(self, instance):
-        calendar_cancel(instance)
+        calendar_delete(instance)
         audit_logger.info(
             "booking.deleted",
             extra={"booking_id": instance.id, "org": instance.organization_id, "user": getattr(self.request.user, "username", "anon")},

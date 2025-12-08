@@ -188,6 +188,30 @@ def calendar_cancel(booking: Booking) -> None:
         return
     calendar_id = booking.resource.gcal_calendar_id if booking.resource else booking.gcal_calendar_id or meta.get("calendar_id") or "primary"
     headers = _google_headers(token)
+    # Prefer marking the event as cancelled instead of deleting, so it remains in Google for audit/reschedule.
+    requests.patch(
+        f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events/{booking.external_calendar_id}",
+        headers=headers,
+        json={"status": "cancelled"},
+        params={"sendUpdates": "all"},
+        timeout=10,
+    )
+    booking.status = Booking.STATUS_CANCELLED
+    booking.save(update_fields=["status", "updated_at"])
+    BookingChangeLog.objects.create(booking=booking, change_type=BookingChangeLog.CHANGE_CANCELLED, actor_type=booking.created_by or "system")
+
+
+def calendar_delete(booking: Booking) -> None:
+    """
+    Hard delete an event from Google (used only on booking delete).
+    """
+    if not booking.external_calendar_id:
+        return
+    token, meta = _load_google_credentials(booking.organization_id)
+    if not token or not meta:
+        return
+    calendar_id = booking.resource.gcal_calendar_id if booking.resource else booking.gcal_calendar_id or meta.get("calendar_id") or "primary"
+    headers = _google_headers(token)
     requests.delete(
         f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events/{booking.external_calendar_id}",
         headers=headers,
