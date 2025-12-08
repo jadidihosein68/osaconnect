@@ -193,8 +193,6 @@ def calendar_cancel(booking: Booking) -> None:
         headers=headers,
         timeout=10,
     )
-    booking.external_calendar_id = ""
-    booking.gcal_event_id = ""
     booking.status = Booking.STATUS_CANCELLED
-    booking.save(update_fields=["external_calendar_id", "gcal_event_id", "status", "updated_at"])
+    booking.save(update_fields=["status", "updated_at"])
     BookingChangeLog.objects.create(booking=booking, change_type=BookingChangeLog.CHANGE_CANCELLED, actor_type=booking.created_by or "system")
