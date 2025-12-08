@@ -11,6 +11,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from assistant.views import AssistantView
 from bookings.views import BookingViewSet, ResourceViewSet
+from bookings.public_views import PublicBookingView, PublicBookingRescheduleView, PublicBookingCancelView, PublicSlotsView
 from contacts.views import ContactViewSet, ContactGroupViewSet
 from messaging.views import InboundMessageViewSet, OutboundMessageViewSet, EmailJobViewSet, EmailAttachmentViewSet, unsubscribe, TelegramOnboardingViewSet, TelegramOnboardWebhook, TelegramMessageViewSet, WhatsAppMessageViewSet, TwilioWhatsAppWebhook, TwilioWhatsAppStatusWebhook, InstagramMessageViewSet, InstagramWebhook, CampaignViewSet
 from notifications.views import NotificationViewSet
@@ -77,6 +78,11 @@ urlpatterns = [
     path("api/integrations/<str:provider>/test/", IntegrationTestView.as_view(), name="integration-test"),
     path("api/integrations/google/start/", GoogleOAuthStartView.as_view(), name="integration-google-start"),
     path("api/integrations/google/callback/", GoogleOAuthCallbackView.as_view(), name="integration-google-callback"),
+    # Calendar Public API (v1)
+    path("api/public/v1/bookings/", PublicBookingView.as_view(), name="public-bookings-v1"),
+    path("api/public/v1/bookings/<str:booking_uid>/reschedule/", PublicBookingRescheduleView.as_view(), name="public-bookings-reschedule"),
+    path("api/public/v1/bookings/<str:booking_uid>/cancel/", PublicBookingCancelView.as_view(), name="public-bookings-cancel"),
+    path("api/public/v1/slots/", PublicSlotsView.as_view(), name="public-slots"),
 ]
 
 # Serve media in development

@@ -182,7 +182,7 @@ API respond :
 ////////////////////////////////////////////////
 
 2- Create a booking
-POST api/v2/bookings is used to create regular bookings, recurring bookings and instant bookings.
+POST api/v1/bookings is used to create regular bookings, recurring bookings and instant bookings.
 
 
  there are 2 ways to book an event type belonging to an individual user:
@@ -467,7 +467,7 @@ respond Object :
 3- Reschedule a booking 
 
 curl --request POST \
-  --url api/v2/bookings/{bookingUid}/reschedule \
+  --url api/v1/bookings/{bookingUid}/reschedule \
   --header 'Content-Type: application/json' \
   --header 'cal-api-version: 2024-08-13' \
   --data '
@@ -598,7 +598,7 @@ respond:
 
 
 curl --request POST \
-  --url /api/v2/bookings/{bookingUid}/cancel \
+  --url /api/v1/bookings/{bookingUid}/cancel \
   --header 'Content-Type: application/json' \
   --header 'cal-api-version: 2024-08-13' \
   --data '
@@ -695,7 +695,7 @@ response : {
 
 
 curl --request GET \
-  --url /api/v2/slots \
+  --url /api/v1/slots \
   --header 'Authorization: Bearer <token>' \
   --header 'cal-api-version: 2024-09-04'
 
