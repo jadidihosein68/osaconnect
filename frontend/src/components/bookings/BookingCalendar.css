@@ -2,6 +2,8 @@
 
 .rbc-calendar {
   font-family: 'Google Sans', 'Roboto', Arial, sans-serif;
+  height: 100%;
+  width: 100%;
 }
 
 /* Header styling */
@@ -31,9 +33,10 @@
   padding: 0 4px;
 }
 
-/* Time slots - 1 hour blocks */
+/* Time slots - 1 hour blocks (60px each so 6 hours = 360px visible) */
 .rbc-timeslot-group {
-  min-height: 48px !important;
+  min-height: 60px !important;
+  height: 60px !important;
   border-bottom: 1px solid #dadce0 !important;
 }
 
@@ -97,17 +100,27 @@
 /* Remove borders from time view */
 .rbc-time-view {
   border: none !important;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 }
 
+/* Time header (day names row) */
+.rbc-time-header {
+  flex-shrink: 0;
+}
+
+/* Time content - scrollable area showing 6 hours (6 x 60px = 360px) */
 .rbc-time-content {
   border-top: 1px solid #dadce0 !important;
+  flex: 1 1 auto;
+  overflow-y: scroll !important;
+  max-height: 360px !important;
+  height: 360px !important;
 }
 
 /* Scrollbar styling */
-.rbc-time-content {
-  overflow-y: auto !important;
-}
-
 .rbc-time-content::-webkit-scrollbar {
   width: 12px;
 }
@@ -131,10 +144,14 @@
   border: 1px solid #dadce0 !important;
   border-radius: 8px;
   overflow: hidden;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .rbc-month-row {
   border-top: 1px solid #dadce0 !important;
+  flex: 1 0 0; /* Ensure rows expand to fill the view */
 }
 
 .rbc-day-bg {
@@ -169,4 +186,23 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Scroll container for time view */
+.booking-calendar-scroll {
+  overflow-y: auto;
+}
+
+/* Fix for hover effect being blocked by events container */
+.rbc-events-container {
+  pointer-events: none;
+}
+
+.rbc-event, .rbc-background-event {
+  pointer-events: auto;
+}
+
+/* Hide All Day row in Time Grid only */
+.rbc-time-view .rbc-allday-cell {
+  display: none !important;
 }

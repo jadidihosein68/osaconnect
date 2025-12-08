@@ -749,8 +749,30 @@ export async function linkInboundContact(id: number | string, payload: { contact
   return data;
 }
 
-export async function fetchBookings(): Promise<Booking[]> {
-  const { data } = await api.get("/bookings/");
+export interface Paginated<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
+export async function fetchBookings(page = 1, pageSize = 10): Promise<Paginated<Booking>> {
+  const { data } = await api.get(`/bookings/?page=${page}&page_size=${pageSize}`);
+  return data;
+}
+
+export interface BookingDashboardResponse {
+  count: number;
+  results: Booking[];
+}
+
+export async function fetchDashboardBookings(): Promise<BookingDashboardResponse> {
+  const { data } = await api.get("/bookings/dashboard/");
+  return data;
+}
+
+export async function fetchBooking(id: number | string): Promise<Booking> {
+  const { data } = await api.get(`/bookings/${id}/`);
   return data;
 }
 
@@ -844,14 +866,14 @@ export async function askAssistant(question: string) {
 }
 
 export async function fetchDashboard() {
-  const [metrics, contacts, outbound, inbound, bookings] = await Promise.all([
+  const [metrics, contacts, outbound, inbound, dashboardBookings] = await Promise.all([
     fetchMetrics(),
     fetchContacts(),
     fetchOutbound(),
     fetchInbound(),
-    fetchBookings(),
+    fetchDashboardBookings(),
   ]);
-  return { metrics, contacts, outbound, inbound, bookings };
+  return { metrics, contacts, outbound, inbound, bookings: dashboardBookings.results, bookingsCount: dashboardBookings.count };
 }
 
 // Integrations

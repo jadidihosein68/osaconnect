@@ -65,8 +65,9 @@ export function BookingCalendar({ bookings, onCreateForDate }: BookingCalendarPr
         </CardTitle>
       </CardHeader>
       <CardContent className="px-6">
-        <div className="h-[calc(100vh-220px)] min-h-[600px] bg-white rounded-b-lg overflow-hidden">
+        <div className="h-[450px] bg-white rounded-b-lg overflow-hidden">
           <BigCalendar
+            style={{ height: '100%' }}
             localizer={localizer}
             events={events}
             defaultView={Views.WEEK}
@@ -76,6 +77,7 @@ export function BookingCalendar({ bookings, onCreateForDate }: BookingCalendarPr
             popup
             selectable={!!onCreateForDate}
             onSelectSlot={handleSelectSlot}
+            scrollToTime={new Date()}
             eventPropGetter={(event) => {
               let backgroundColor = '#039be5'; // Google Calendar Blue
               if (event.status === 'confirmed') backgroundColor = '#0b8043'; // Google Green

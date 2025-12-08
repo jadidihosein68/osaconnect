@@ -38,12 +38,19 @@ export function CreateBookingForm({ onCreated, onCancel }: Props) {
   const [resources, setResources] = useState<Resource[]>([]);
   const [integrationOrganizer, setIntegrationOrganizer] = useState<string | null>(null);
 
+  const toLocalInputValue = (value: string) => {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '';
+    const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
+  };
+
   useEffect(() => {
     const params = new URLSearchParams(locationHook.search);
     const prefillStart = params.get('start') || sessionStorage.getItem('booking_prefill_start');
     const prefillEnd = params.get('end') || sessionStorage.getItem('booking_prefill_end');
-    if (prefillStart) setStart(new Date(prefillStart).toISOString().slice(0, 16));
-    if (prefillEnd) setEnd(new Date(prefillEnd).toISOString().slice(0, 16));
+    if (prefillStart) setStart(toLocalInputValue(prefillStart));
+    if (prefillEnd) setEnd(toLocalInputValue(prefillEnd));
     sessionStorage.removeItem('booking_prefill_start');
     sessionStorage.removeItem('booking_prefill_end');
   }, [locationHook.search]);

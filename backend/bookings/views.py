@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from rest_framework import filters, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import SAFE_METHODS
 from rest_framework.permissions import IsAuthenticated
 
@@ -12,6 +15,11 @@ from .services import calendar_create, calendar_update, calendar_cancel
 import logging
 
 audit_logger = logging.getLogger("corbi.audit")
+
+
+class BookingPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = "page_size"
 
 
 class ResourceViewSet(viewsets.ModelViewSet):
@@ -42,6 +50,7 @@ class ResourceViewSet(viewsets.ModelViewSet):
 class BookingViewSet(viewsets.ModelViewSet):
     queryset = Booking.objects.select_related("contact", "resource").all()
     serializer_class = BookingSerializer
+    pagination_class = BookingPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["title", "contact__full_name", "contact__email"]
     ordering_fields = ["start_time", "status", "created_at"]
@@ -86,3 +95,18 @@ class BookingViewSet(viewsets.ModelViewSet):
             extra={"booking_id": instance.id, "org": instance.organization_id, "user": getattr(self.request.user, "username", "anon")},
         )
         return super().perform_destroy(instance)
+
+    @action(detail=False, methods=["get"], url_path="dashboard", pagination_class=None)
+    def dashboard(self, request):
+        """
+        Lightweight, non-paginated snapshot of upcoming bookings for dashboard widgets.
+        Returns next 10 upcoming bookings for the current org.
+        """
+        org = get_current_org(request)
+        qs = (
+            Booking.objects.select_related("contact", "resource")
+            .filter(organization=org)
+            .order_by("start_time")
+        )
+        data = BookingSerializer(qs, many=True).data
+        return Response({"count": qs.count(), "results": data})

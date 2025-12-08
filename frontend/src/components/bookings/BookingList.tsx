@@ -6,7 +6,7 @@ import { Badge } from '../ui/badge';
 import { Plus, Eye, Calendar as CalendarIcon } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { fetchBookings, fetchResources, Booking, Resource } from '../../lib/api';
+import { fetchBookings, fetchResources, Booking, Resource, Paginated } from '../../lib/api';
 import { BookingCalendar } from './BookingCalendar';
 
 interface BookingListProps {
@@ -24,14 +24,18 @@ export function BookingList({ onViewBooking, onCreateBooking }: BookingListProps
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [resources, setResources] = useState<Resource[]>([]);
   const [resourceFilter, setResourceFilter] = useState<string>('all');
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(10);
+  const [total, setTotal] = useState(0);
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       setError(null);
       try {
-        const [data, resData] = await Promise.all([fetchBookings(), fetchResources()]);
-        setBookings(data);
+        const [data, resData] = await Promise.all([fetchBookings(page, pageSize), fetchResources()]);
+        setBookings(data.results);
+        setTotal(data.count);
         setResources(resData);
       } catch {
         setError('Failed to load bookings');
@@ -40,7 +44,7 @@ export function BookingList({ onViewBooking, onCreateBooking }: BookingListProps
       }
     };
     load();
-  }, []);
+  }, [page, pageSize]);
 
   const filtered = useMemo(
     () =>
@@ -202,6 +206,24 @@ export function BookingList({ onViewBooking, onCreateBooking }: BookingListProps
                 ))}
               </tbody>
             </table>
+            <div className="flex items-center justify-between mt-4">
+              <div className="text-sm text-gray-600">
+                Showing {(page - 1) * pageSize + 1} - {Math.min(page * pageSize, total)} of {total}
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                  Prev
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page * pageSize >= total}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
           </div>
           )}
         </CardContent>

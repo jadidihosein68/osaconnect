@@ -6,7 +6,7 @@ import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Badge } from '../ui/badge';
 import { ArrowLeft, Save, Trash2 } from 'lucide-react';
-import { fetchBookings, fetchResources, Booking, updateBooking, Resource, deleteBooking } from '../../lib/api';
+import { fetchBooking, fetchResources, Booking, updateBooking, Resource, deleteBooking } from '../../lib/api';
 
 interface BookingDetailProps {
   bookingId: string | null;
@@ -29,6 +29,12 @@ export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
     attendee_emails: '' as string,
   });
   const [resources, setResources] = useState<Resource[]>([]);
+  const toLocalInputValue = (value: string) => {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '';
+    const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
+  };
 
   useEffect(() => {
     if (!bookingId) return;
@@ -36,22 +42,18 @@ export function BookingDetail({ bookingId, onBack }: BookingDetailProps) {
       setLoading(true);
       setError(null);
       try {
-        const data = await fetchBookings();
-        const match = data.find((b) => String(b.id) === bookingId);
-        if (match) {
-          setBooking(match);
-          setForm({
-            title: match.title || '',
-            start_time: match.start_time ? match.start_time.slice(0, 16) : '',
-            end_time: match.end_time ? match.end_time.slice(0, 16) : '',
-            notes: match.notes || '',
-            location: match.location || '',
-            organizer_email: match.organizer_email || '',
-            resource_id: match.resource?.id ? String(match.resource.id) : '',
-            attendee_emails: (match.attendees || []).map((a: any) => a.email).filter(Boolean).join(', '),
-          });
-        }
-        else setError('Booking not found');
+        const match = await fetchBooking(bookingId);
+        setBooking(match);
+        setForm({
+          title: match.title || '',
+          start_time: match.start_time ? toLocalInputValue(match.start_time) : '',
+          end_time: match.end_time ? toLocalInputValue(match.end_time) : '',
+          notes: match.notes || '',
+          location: match.location || '',
+          organizer_email: match.organizer_email || '',
+          resource_id: match.resource?.id ? String(match.resource.id) : '',
+          attendee_emails: (match.attendees || []).map((a: any) => a.email).filter(Boolean).join(', '),
+        });
       } catch {
         setError('Failed to load booking');
       } finally {
