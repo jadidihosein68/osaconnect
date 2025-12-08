@@ -1,242 +1,50 @@
-1. Scope & Objectives
-
-Implement Google Calendar integration in CORBI (Django + React) so that:
-
-Users, admins, rooms, and devices are all schedulable via Google Calendar.
-
-CORBI stays in two-way sync with Google Calendar (UI + webhooks).
-
-AI agents (ElevenLabs / CORBI AI) can safely create/manage meetings via internal CRUD APIs.
-
-Existing logging, SendGrid, Twilio (WhatsApp), and “connection” models are reused.
-
-Best practices are followed for OAuth2, sync, webhooks, auditing, and multi-tenant safety. 
-Google for Developers
-+2
-Google for Developers
-+2
-
-2. Actors & Roles
-
-End User
-
-Books / edits meetings.
-
-Books rooms and devices.
-
-Views their own calendar and bookings.
-
-Admin User
-
-Onboards rooms and devices.
-
-Views calendars for all rooms/devices.
-
-Manages Google connection for the tenant (if necessary).
-
-AI Agent (ElevenLabs / CORBI AI)
-
-Uses internal CRUD APIs to create/reschedule/cancel AI-owned meetings only.
-
-System / Scheduler Jobs
-
-Syncs with Google via webhooks + incremental sync.
-
-Executes nightly “no-show” evaluation.
-
-3. Functional Requirements
-3.1 Google Auth & Connection Management
-
-FR-1. Reuse existing Google connection
-
-System must read Google Calendar credentials (access token, refresh token, scopes, expiry, etc.) from the existing connection records in DB, not create a new schema.
-
-If calendar scope is missing, the system must trigger a re-consent flow.
-
-FR-2. OAuth 2.0 with offline access
-
-Use OAuth 2.0 with access_token + refresh_token and offline access to call Google Calendar even when user is not online. 
-qalbit.com
-
-Store tokens encrypted at rest in DB (following existing secrets policy).
-
-FR-3. Least privilege scopes
-
-Use https://www.googleapis.com/auth/calendar.events (or tighter if possible) rather than full calendar scope, unless room/device provisioning requires more. 
-Google Cloud
-
-FR-4. Token refresh
-
-Backend must automatically refresh access tokens on 401/invalid_grant and persist the new tokens.
-
-All calendar calls must be wrapped in a common service that handles token refresh and error mapping.
-
-FR-5. Multi-tenant isolation
-
-All calls must be scoped by tenant & connection ID; no tokens shared across tenants.
-
-3.2 Room / Device Onboarding
-
-FR-6. Onboard room/device
-
-Admin can onboard a room or device in CORBI with:
-
-Name, type (room/device), capacity (for room), description.
-
-Associated Google Calendar ID (either:
-
-Select from user’s accessible calendars, or
-
-Create a dedicated calendar via API if allowed by workspace). 
-Google Cloud
-
-Store mapping in DB: resource_id, resource_type, gcal_calendar_id, tenant_id.
-
-FR-7. Validation
-
-On save, system must validate that the given Google calendar ID is accessible with current credentials (via a simple calendars.get). 
-Google Cloud
-
-FR-8. Disable/retire resource
-
-Admin can disable a room/device. Disabled resources:
-
-Remain in DB for history.
-
-Cannot be booked for new meetings.
-
-3.3 Meeting CRUD (Set / Edit / Delete) + Policies
-
-FR-9. Create meeting (CORBI)
-
-Users (or AI) can create meetings via CORBI UI/API with:
-
-Title, description, start/end time, time zone, participants (emails), room/device, location, meeting link (if any), custom metadata (e.g. tags, correlationId).
-
-System:
-
-Creates event in Google Calendar using events.insert for both:
-
-User primary calendar (if required) and/or
-
-Resource calendar for room/device. 
-Google Cloud
-
-Persists local event record with:
-
-local_event_id, gcal_event_id, calendar_id, resource_id, created_by, created_by_type (AI|Human), status, timestamps, etag/sync_token or updated fields.
-
-FR-10. Edit meeting
-
-Editable fields: title, description, time, participants, room/device, meeting link.
-
-Editing from CORBI updates both:
-
-Google Calendar event via events.update/patch.
-
-Local DB record with updated metadata + audit log.
-
-If Google rejects update (e.g., permissions), we must log and show user error.
-
-FR-11. Delete / cancel meeting
-
-Business rule:
-
-Meetings created by AI: can be cancelled by AI or user within CORBI.
-
-Meetings created by human in CORBI: cannot be cancelled automatically by AI; only:
-
-The human via CORBI UI, or
-
-Any actor via Google’s own UI (we mirror the change).
-
-System must:
-
-Call events.delete or set status=cancelled depending on business preference, but maintain local status as CANCELLED. 
-Google Cloud
-
-Audit “cancelled_by” (AI, human, external Google UI via webhook).
-
-FR-12. External deletions / changes
-
-If Google Calendar event is deleted/updated externally, webhook + incremental sync must:
-
-Detect the change.
-
-Update local DB to reflect new status/time.
-
-Trigger notification logic (e.g. cancellation notices) if configured.
-
-FR-13. Track created / updated / deleted
-
-For each meeting, maintain a change log:
-
-event_change_id, event_id, change_type (CREATED|UPDATED|CANCELLED|RESCHEDULED), actor_type (USER|AI|SYSTEM|EXTERNAL), timestamp, diff snapshot.
-
-Log entries must be written using existing logging framework and stored in DB for analytics.
-
-3.4 Calendar UI (Rooms & Devices)
-
-FR-14. Resource calendar view
-
-React UI to:
-
-Select Room OR Device.
-
-See all bookings for selected resource in a weekly/daily view:
-
-Time slots, current status (Booked, Available, No-Show, Cancelled, Completed).
-
-Meeting title and organizer.
-
-FR-15. Slot selection & booking
-
-User can:
-
-Pick date and time slot on selected resource’s calendar.
-
-Create a new event (see FR-9) from that slot.
-
-UI must prevent overlapping bookings:
-
-Use Google Calendar freebusy.query or existing event list to validate before final confirmation. 
-Google for Developers
-
-FR-16. Admin overview
-
-Admin can:
-
-Filter by resource (room/device) and date range.
-
-View occupancy analytics (e.g., number of bookings per day).
-
-3.5 Webhooks & Sync with Google Calendar
-
-FR-17. Google Calendar webhooks
-
-Implement webhook endpoint(s) to receive push notifications from Google Calendar via events.watch on each relevant calendar (user primary / resource calendars). 
-Google for Developers
-+2
-Google for Developers
-+2
-
-Endpoint must:
-
-Verify headers (X-Goog-Channel-ID, X-Goog-Resource-ID, etc.).
-
-Log receipt and quickly return 2xx to avoid retries.
-
-FR-18. Incremental sync
-
-On each webhook notification:
-
-Use events.list with syncToken or updatedMin (last sync time) to fetch changed events. 
-Latenode Official Community
-+4
-Google for Developers
-+4
-Google Developers Blog
-+4
+## Scope & Objectives
+
+Current implementation focuses on Google Calendar integration for a multi-tenant SaaS with two meeting modes:
+- **Custom meeting** (user-organized) with organizer email chosen from org-level Google connections.
+- **Room/device meeting** using onboarded Google resource calendars.
+
+Key goals implemented:
+- Use org-scoped Google credentials from the Integrations (Google Calendar) card; tokens are persisted and refreshed automatically.
+- Create/update/cancel events in Google Calendar and mirror them locally in `bookings` with meeting_type (`custom` or `room`).
+- UI shows a Google-like calendar (week/day/month) with hover, scroll, and time window controls; selecting a slot pre-fills the create form.
+- Booking list is paginated (backend paginator on bookings only); dashboard uses its own non-paginated snapshot endpoint.
+- Attendees can be selected from contacts/groups and added manually as comma-separated emails; organizer email is a dropdown sourced from stored Google integrations for the org.
+
+## Actors & Roles
+- **End user**: creates/edits/cancels meetings; books rooms/devices; sees calendar and list.
+- **Admin**: onboards Google integration and resources (room/device calendars).
+- **System**: refreshes tokens, syncs bookings, writes audit logs.
+
+## Functional Summary (Implemented)
+### Auth & Connections
+- Reuse stored Google integration per tenant (access/refresh, expiry, scopes). Tokens refreshed on 401 and persisted. Scopes: calendar events. Org isolation enforced.
+
+### Resources (Rooms/Devices)
+- Resources stored with `gcal_calendar_id`, `resource_type` (room/device). Validation via calendar get. Disabled resources cannot be booked.
+
+### Booking CRUD
+- Two meeting types:
+  - **custom**: title, notes, start/end, organizer_email (dropdown from org integrations), attendees (contacts, groups, manual emails). Location optional.
+  - **room**: resource dropdown (Google calendar), title, notes, start/end; location auto-filled from resource; organizer implicitly resource; contacts/status fields hidden.
+- Status managed internally; edit/delete call Google and update local booking.
+- Google links: after create/test we surface an “Open in Google Calendar” URL.
+
+### UI
+- Calendar (React Big Calendar) styled like Google; scrollable time grid; time-window dropdown (6-hour slices) with auto-scroll to current time; hover highlights.
+- Slot click deep-links to `/bookings/new` with prefilled start/end.
+- Booking list paginated; delete/edit supported; detail view fetches single booking.
+
+### Dashboard
+- Uses a dedicated `/bookings/dashboard/` endpoint (non-paginated) returning `{count, results}` for upcoming bookings; dashboards do not reuse paginated APIs.
+
+## Webhooks / Sync (planned or partial)
+- Events mirror to Google on create/update/delete. Full webhook/sync still follows original design (verify headers, use syncToken/updatedMin) but may need expansion.
+
+## Gaps / Notes
+- Notifications for calendar events are currently disabled per user request.
+- Secure storage of Google keys was temporarily disabled for troubleshooting; plan to re-enable Fernet encryption.
+- Full two-way webhook sync and resource auto-provisioning are partially implemented; see technicalgap.md for follow-ups.
 
 Update local DB records accordingly (insert/update/delete).
 

@@ -20,24 +20,39 @@ class ContentSecurityPolicyMiddleware:
         if "text/html" not in content_type:
             return response
 
+        is_docs = request.path.startswith("/api/docs/")
+
         if settings.DEBUG:
             # Relaxed for dev/HMR to suppress eval warnings from tooling.
             csp = (
                 "default-src 'self' data: blob:; "
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; "
-                "style-src 'self' 'unsafe-inline' data:; "
-                "img-src 'self' data: blob:; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:"
+                + (" https://cdn.jsdelivr.net" if is_docs else "")
+                + "; "
+                "style-src 'self' 'unsafe-inline' data:"
+                + (" https://cdn.jsdelivr.net" if is_docs else "")
+                + "; "
+                "img-src 'self' data: blob: "
+                + ("https://cdn.jsdelivr.net " if is_docs else "")
+                + "; "
                 "connect-src 'self' ws://localhost:5173 http://localhost:5173 http://localhost:8000; "
                 "font-src 'self' data:; "
                 "frame-ancestors 'self'; "
             )
         else:
-            # Stricter production policy, no eval.
+            # Stricter production policy, no eval. Allow jsdelivr only for docs pages.
+            extra = " https://cdn.jsdelivr.net" if is_docs else ""
             csp = (
                 "default-src 'self'; "
-                "script-src 'self'; "
-                "style-src 'self' 'unsafe-inline'; "
-                "img-src 'self' data:; "
+                "script-src 'self'"
+                + extra
+                + "; "
+                "style-src 'self' 'unsafe-inline'"
+                + extra
+                + "; "
+                "img-src 'self' data:"
+                + extra
+                + "; "
                 "connect-src 'self'; "
                 "font-src 'self' data:; "
                 "frame-ancestors 'self'; "
