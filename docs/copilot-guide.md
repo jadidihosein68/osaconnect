@@ -126,9 +126,11 @@ npm run dev  # http://localhost:5173 proxied to backend
 - Settings (Integrations & Branding):
   - Endpoint: `GET /api/settings/` returns non-secret runtime config; integrations managed via `/api/integrations/` endpoints.
   - Integrations UI (per org, admin-only):
-    - WhatsApp Business, SendGrid (Email), Telegram Bot, Instagram Messaging, Google Calendar, ElevenLabs Voice Agent.
+    - WhatsApp Business, SendGrid (Email), Telegram Bot, Instagram Messaging, Google Calendar, ElevenLabs Voice Agent, OpenRouter LLM.
     - Connect flow: POST `/api/integrations/{provider}/connect/` with required tokens/metadata; tokens stored encrypted and not returned. Disconnect: DELETE `/api/integrations/{provider}/`.
-    - Test connection: POST `/api/integrations/{provider}/test/` (where implemented) uses stored secrets server-side; UI should not expose tokens after save.
+    - Test connection: POST `/api/integrations/{provider}/test/` (where implemented) uses stored secrets server-side; UI should not expose tokens after save. Implemented checks:
+      - SendGrid (profile ping), WhatsApp (Twilio send), Telegram (getMe), Instagram (Graph `me`), Google Calendar (creates short-lived test event), ElevenLabs (voice test call), OpenRouter (OpenAI client `models.list` against `OPENROUTER_BASE_URL`, default `https://openrouter.ai/api/v1`).
+      - If you ever see “Unsupported provider”, restart the backend to refresh provider choices; ensure the provider slug matches the one saved on connect.
     - Google Calendar: OAuth flow starts at `/api/integrations/google/start/`, tokens stored on connect; test endpoint creates a test event; resources (rooms/devices) synced to `Resource` when provided.
     - ElevenLabs Voice Agent: store API key, agent id, phone number id, webhook secret, test_to_number; after connect, only test_to_number is editable until “Edit” is clicked.
   - Branding UI: Company info display + logo upload; logo intended for navbar usage (per org). Endpoint uses `OrganizationBranding` model (image requires Pillow).
