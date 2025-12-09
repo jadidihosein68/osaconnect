@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from .models import Membership, Organization, OrganizationBranding, UserProfile
+from .models import ApiKey, Membership, Organization, OrganizationBranding, UserProfile
 
 
 class OrganizationSerializer(serializers.ModelSerializer):
@@ -84,3 +84,25 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def get_username(self, obj):
         return obj.user.username
+
+
+class ApiKeySerializer(serializers.ModelSerializer):
+    masked_key = serializers.SerializerMethodField()
+    plain_key = serializers.CharField(read_only=True, required=False, allow_blank=True)
+
+    class Meta:
+        model = ApiKey
+        fields = [
+            "id",
+            "name",
+            "masked_key",
+            "plain_key",
+            "status",
+            "scopes",
+            "created_at",
+            "revoked_at",
+        ]
+        read_only_fields = ["masked_key", "status", "created_at", "revoked_at"]
+
+    def get_masked_key(self, obj: ApiKey):
+        return obj.masked_key()

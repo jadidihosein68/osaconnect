@@ -19,6 +19,9 @@ import { useState } from 'react';
 import { NotificationBell } from './notifications/NotificationBell';
 import { ChevronDown } from 'lucide-react';
 
+type SubMenuItem = { id: string; label: string; adminOnly?: boolean };
+type MenuItem = { id: string; label: string; icon: any; submenu?: SubMenuItem[] };
+
 interface LayoutProps {
   children: React.ReactNode;
   currentScreen: string;
@@ -31,6 +34,7 @@ interface LayoutProps {
   userEmail?: string;
   logoUrl?: string | null;
   avatarUrl?: string | null;
+  isAdmin?: boolean;
 }
 
 function getInitials(name?: string) {
@@ -40,8 +44,8 @@ function getInitials(name?: string) {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
-export function Layout({ children, currentScreen, onNavigate, onLogout, organizations = [], currentOrgId, onOrgChange, userName, userEmail, logoUrl, avatarUrl }: LayoutProps) {
-  const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({ contacts: true });
+export function Layout({ children, currentScreen, onNavigate, onLogout, organizations = [], currentOrgId, onOrgChange, userName, userEmail, logoUrl, avatarUrl, isAdmin }: LayoutProps) {
+  const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({ contacts: true, settings: true });
   const [profileOpen, setProfileOpen] = useState(false);
 
   const isSubActive = (path: string, subId: string) => {
@@ -55,7 +59,7 @@ export function Layout({ children, currentScreen, onNavigate, onLogout, organiza
     return path === subId || path.startsWith(`${subId}`);
   };
 
-  const menuItems = [
+  const menuItems: MenuItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     {
       id: 'contacts',
@@ -91,7 +95,15 @@ export function Layout({ children, currentScreen, onNavigate, onLogout, organiza
     },
     { id: 'monitoring', label: 'Monitoring', icon: BarChart3 },
     { id: 'billing', label: 'Billing', icon: CreditCard },
-    { id: 'settings', label: 'Settings', icon: SettingsIcon },
+    {
+      id: 'settings',
+      label: 'Settings',
+      icon: SettingsIcon,
+      submenu: [
+        { id: '/settings/brandingandintegration', label: 'Branding & Integrations' },
+        { id: '/settings/developers', label: 'Developers', adminOnly: true },
+      ],
+    },
   ];
 
   return (
@@ -148,20 +160,22 @@ export function Layout({ children, currentScreen, onNavigate, onLogout, organiza
                 </button>
                 {item.submenu && openSections[item.id] && (
                   <ul className="ml-8 mt-1 space-y-1">
-                    {item.submenu.map((subitem) => (
-                      <li key={subitem.id}>
-                        <button
-                          onClick={() => onNavigate(subitem.id.startsWith('/') ? subitem.id : `/${subitem.id}`)}
-                          className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
-                            isSubActive(currentScreen, subitem.id)
-                              ? 'bg-indigo-50 text-indigo-600'
-                              : 'text-gray-600 hover:bg-gray-100'
-                          }`}
-                        >
-                          {subitem.label}
-                        </button>
-                      </li>
-                    ))}
+                    {item.submenu
+                      .filter((subitem) => !('adminOnly' in subitem) || (subitem as any).adminOnly !== true || isAdmin)
+                      .map((subitem) => (
+                        <li key={subitem.id}>
+                          <button
+                            onClick={() => onNavigate(subitem.id.startsWith('/') ? subitem.id : `/${subitem.id}`)}
+                            className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
+                              isSubActive(currentScreen, subitem.id)
+                                ? 'bg-indigo-50 text-indigo-600'
+                                : 'text-gray-600 hover:bg-gray-100'
+                            }`}
+                          >
+                            {subitem.label}
+                          </button>
+                        </li>
+                      ))}
                   </ul>
                 )}
               </li>

@@ -138,6 +138,17 @@ export interface NotificationRecipient {
   notification: Notification;
 }
 
+export interface ApiKey {
+  id: number;
+  name: string;
+  masked_key: string;
+  plain_key?: string;
+  status: string;
+  scopes: string[];
+  created_at: string;
+  revoked_at?: string | null;
+}
+
 export interface Branding {
   company_name: string;
   address: string;
@@ -908,5 +919,26 @@ export async function disconnectIntegration(provider: string) {
 
 export async function testIntegration(provider: string, payload: { token: string; extra?: Record<string, any> }) {
   const { data } = await api.post(`/integrations/${provider}/test/`, payload);
+  return data;
+}
+
+// API Keys / Developers
+export async function fetchApiKeys(): Promise<ApiKey[]> {
+  const { data } = await api.get('/api-keys/');
+  return data;
+}
+
+export async function createApiKey(payload: { name: string; scopes?: string[] }): Promise<ApiKey> {
+  const { data } = await api.post('/api-keys/', payload);
+  return data;
+}
+
+export async function revokeApiKey(id: number): Promise<ApiKey> {
+  const { data } = await api.post(`/api-keys/${id}/revoke/`);
+  return data;
+}
+
+export async function regenerateApiKey(id: number): Promise<ApiKey> {
+  const { data } = await api.post(`/api-keys/${id}/regenerate/`);
   return data;
 }

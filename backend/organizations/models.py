@@ -64,3 +64,29 @@ class UserProfile(models.Model):
 
     def __str__(self) -> str:
         return f"Profile for {self.user_id}"
+
+
+class ApiKey(models.Model):
+    STATUS_ACTIVE = "active"
+    STATUS_REVOKED = "revoked"
+    STATUS_CHOICES = [(STATUS_ACTIVE, "Active"), (STATUS_REVOKED, "Revoked")]
+
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="api_keys")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="api_keys")
+    name = models.CharField(max_length=255)
+    key_hashed = models.CharField(max_length=128, unique=True)
+    prefix = models.CharField(max_length=32, db_index=True)
+    scopes = models.JSONField(default=list, blank=True)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        unique_together = ("organization", "name")
+
+    def masked_key(self):
+        return f"{self.prefix}...{self.key_hashed[-6:]}"
+
+    def __str__(self) -> str:
+        return f"API Key {self.name} ({self.organization_id})"

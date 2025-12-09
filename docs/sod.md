@@ -3,40 +3,40 @@
 This document summarizes the current solution: a multi-tenant messaging and automation platform with unified channels, campaigns, monitoring, and branding.
 
 ## Core Capabilities
-- **Multi-tenant, role-based access**: Organizations, memberships, roles, and org-scoped data across all modules.
-- **Authentication & SSO hooks**: Username/password with JWT; placeholders for Microsoft/Google SSO start endpoints.
+- **Multi-tenant, role-based access**: Organizations, memberships, roles, org-scoped data across all modules.
+- **Authentication & SSO hooks**: Username/password with JWT; redirect-preserving login; placeholders for Microsoft/Google SSO start endpoints.
 - **Messaging Hub**:
   - Channels: Email (SendGrid), WhatsApp (Twilio), Telegram bot, Instagram DM.
-  - Send single messages with attachments (channel-specific support), per-channel throttling, and suppression checks.
-  - Conversations for WA/Telegram/Instagram with live polling and attachment previews.
+  - Single-send with attachments (channel-specific), throttling, suppression checks.
+  - Conversations for WA/Telegram/Instagram with polling and attachment previews.
 - **Campaigns**:
-  - Multi-channel campaigns (Email/WhatsApp/Telegram/Instagram) with target groups and cost estimation.
-  - SendGrid callbacks update per-recipient status (delivered, bounced, spam, open) and auto-complete campaigns.
-  - Recipient status table, KPIs (sent/delivered/read/failed), and cost/target counts.
+  - Multi-channel campaigns (Email/WhatsApp/Telegram/Instagram), target groups, cost estimation.
+  - SendGrid webhooks drive per-recipient status (delivered/bounce/spam/open) and campaign completion.
+  - Recipient table + KPIs (sent/delivered/read/failed), cost/target counts.
 - **Templates**:
-  - Reusable templates with variables, placeholders validation, approval flow, default template, footer with unsubscribe link placeholder.
-  - Preview and approval actions; metadata (approved by/at).
+  - Reusable templates with variable validation, approval flow, default template, footer with unsubscribe placeholder.
+  - Preview, approve; metadata (approved by/at).
 - **Contacts & Groups**:
-  - Org-scoped contacts with de-duplication rules and per-channel identifiers (email, phone, WhatsApp, Telegram chat, Instagram).
-  - Contact groups (many-to-many) with colors, filters, and assignment via UI.
+  - Org-scoped contacts with de-duplication per channel (email/phone/WA/Telegram/Instagram).
+  - Groups many-to-many with colors, filters, bulk assign.
 - **Inbound & Outbound Logs**:
-  - Inbound messages stored for WA/Telegram; outbound logs per channel; email job details.
+  - Inbound for WA/Telegram; outbound per channel; email job details.
 - **Monitoring & Dashboard**:
   - Metrics endpoints with date ranges; counts for contacts, bookings, inbound/outbound, campaigns, email jobs, alerts.
-  - Monitoring dashboard cards (totals, latency percentiles when ProviderEvents have latency, callback errors).
-  - Alerts listing with acknowledge action.
+  - Monitoring cards (totals, latency p95/p99 when ProviderEvents include latency, callback errors) and alerts list with acknowledge.
+- **Bookings & Calendar**:
+  - Internal booking UI (custom vs room/device) with Google Calendar integration; cancel keeps event IDs, delete hard-deletes.
+  - Public Calendar API (v1) for external callers: create, reschedule, cancel bookings; list slots; Google event updates.
 - **Branding & Profile**:
-  - Org branding (logo, company info); logo shown in header/side bar.
-  - User profile with avatar upload and phone; header avatar reflects uploads.
+  - Org branding (logo/company info) shown in header; user profile avatar/phone.
+- **Developers / API Keys**:
+  - Org-admin-managed API keys (list/create/revoke/regenerate, hashed storage) with Developers page UI.
 - **Notifications**:
-  - Backend model/API plus bell dropdown and list page; campaign completion emits notifications (other producers pending).
+  - Model/API plus bell and list; campaign completion emits notifications (others pending).
 - **Logging & Observability**:
-  - Structured logging with request_id; rotating application logs.
-  - HTTP logging middleware (DEV full bodies; PROD errors/webhooks with truncation).
-  - Webhook-specific logging for SendGrid/other providers.
-- **Compliance**:
-  - Unsubscribe link placeholder in email footer; suppression checks (bounces/opt-outs) applied before send (email/WA).
-  - CSP middleware (dev relaxed, prod stricter) to reduce eval warnings.
+  - Structured logs with request_id, rotating files; HTTP logging middleware (DEV full bodies, PROD error/webhook snippets); webhook logs.
+- **Compliance & CSP**:
+  - Unsubscribe placeholder and suppression checks for email/WA; CSP middleware (dev relaxed, prod stricter to avoid eval).
 
 ## Frontend Highlights
 - React + Vite SPA with protected routes and deep-link handling for login redirect.
@@ -44,16 +44,18 @@ This document summarizes the current solution: a multi-tenant messaging and auto
 - Channel-themed conversation UI, rich email editor, attachment uploads, campaign cards/list/detail, tooltips for KPIs.
 
 ## Pending / Known Gaps
-- AI Assistant remains stubbed (KB search and model integration pending).
-- Notifications: only campaign completion emits events; other producers (integrations, monitoring alerts) not wired.
-- Opt-out UI/global suppression management is minimal.
-- Calendar/provider integrations (Google/Microsoft) not implemented.
-- Some monitoring charts rely on ProviderEvent latency; may show zero if not populated.
-- Tests and seed data are minimal; CI not configured.
-- Additional security hardening (prod CSP, rate limiting) may be needed for production.
+- AI Assistant still stubbed (KB + provider integration pending).
+- Notifications: only campaign completion fires; integrations/monitoring producers not wired.
+- Opt-out UI/global suppression minimal.
+- Calendar: Microsoft not implemented; token refresh/rotation hardening still needed.
+- Monitoring charts show zero until ProviderEvents carry latency/failure data.
+- Tests/seed/CI minimal; security hardening (prod CSP, rate limiting) still needed.
+- Developer API keys: no usage analytics yet; keys are hashed, but rotation/expiry policies are manual.
 
 ## Setup Notes
-- Backend requires PostgreSQL via `DATABASE_URL`; run migrations to create schema.
-- Install requirements (`pip install -r backend/requirements.txt`), ensure Pillow and psycopg2-binary are installed.
-- Configure SendGrid, Twilio WhatsApp, Telegram bot, Instagram credentials in `.env`.
-- Set public webhook URLs (SendGrid event webhook to `/api/callbacks/sendgrid/`, Twilio WhatsApp webhook/status, Telegram onboarding webhook, Instagram webhook per blueprint).
+- Backend expects PostgreSQL via `DATABASE_URL`; run migrations.
+- Install deps: `pip install -r backend/requirements.txt` (includes drf-spectacular for Swagger).
+- Configure SendGrid, Twilio WhatsApp, Telegram bot, Instagram creds in `.env`.
+- Webhooks: SendGrid → `/api/callbacks/sendgrid/`; Twilio WA webhook/status; Telegram onboard; Instagram webhook.
+- Swagger/Redoc: `/api/docs/swagger/`, `/api/docs/redoc/`; schema at `/api/schema/`.
+- Calendar: set Google creds per integration docs; public Calendar API lives under `/api/public/v1/...`.

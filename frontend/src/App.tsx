@@ -18,6 +18,7 @@ import { CreateBookingForm } from './components/bookings/CreateBookingForm';
 import { OutboundLogs } from './components/monitoring/OutboundLogs';
 import { MonitoringDashboard } from './components/monitoring/MonitoringDashboard';
 import { Settings } from './components/settings/Settings';
+import { Developers } from './components/settings/Developers';
 import { Billing } from './components/billing/Billing';
 import { GroupsPage } from './components/contacts/GroupsPage';
 import { EmailLogs } from './components/messaging/EmailLogs';
@@ -45,6 +46,7 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [brandingLogo, setBrandingLogo] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const intendedPathRef = useRef<string | null>(null);
@@ -91,6 +93,7 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
     try {
       const orgs = await fetchMemberships();
       setMemberships(orgs);
+      setIsAdmin(orgs.some((m) => m.role === 'admin'));
       if (orgs.length > 0) {
         const selectedOrg = orgs[0].organization.id;
         const userInfo = deriveUserFromMembership(orgs[0]);
@@ -163,6 +166,7 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
         try {
           const orgs = await fetchMemberships();
           setMemberships(orgs);
+          setIsAdmin(orgs.some((m) => m.role === 'admin'));
           if (orgs.length > 0) {
             const userInfo = deriveUserFromMembership(orgs[0]);
             if (userInfo.name) setUserName(userInfo.name);
@@ -198,6 +202,7 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
         } catch {
           clearAuth();
           setIsLoggedIn(false);
+          setIsAdmin(false);
         } finally {
           setLoadingMemberships(false);
         }
@@ -271,12 +276,14 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
             setUserEmail(null);
             setAvatarUrl(null);
             setIsLoggedIn(false);
+            setIsAdmin(false);
             navigate('/login', { replace: true });
           }}
           userName={userName || userEmail || 'User'}
           userEmail={userEmail || undefined}
           logoUrl={brandingLogo || undefined}
           avatarUrl={avatarUrl || undefined}
+          isAdmin={isAdmin}
         >
       <Routes future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Route path="/login" element={<Login onLogin={handleLogin} loading={loadingMemberships} memberships={memberships} />} />
@@ -334,7 +341,9 @@ export default function App({ onAuthPersist, onOrgPersist }: AppProps) {
                 <Route path="/monitoring/outbound" element={<OutboundLogs />} />
                 <Route path="/monitoring" element={<MonitoringDashboard />} />
                 <Route path="/billing" element={<Billing />} />
-                <Route path="/settings" element={<Settings />} />
+                <Route path="/settings" element={<Navigate to="/settings/brandingandintegration" replace />} />
+                <Route path="/settings/brandingandintegration" element={<Settings />} />
+                <Route path="/settings/developers" element={<Developers isAdmin={isAdmin} />} />
                 <Route path="/notifications" element={<NotificationList />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
