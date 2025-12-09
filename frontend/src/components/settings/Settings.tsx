@@ -13,9 +13,9 @@ export function Settings() {
   const [activeTab, setActiveTab] = useState('branding');
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [errors, setErrors] = useState<string | null>(null);
-  const [confirmDisconnect, setConfirmDisconnect] = useState<{ open: boolean; provider?: string }>({ open: false });
+    const [message, setMessage] = useState<string | null>(null);
+    const [errors, setErrors] = useState<string | null>(null);
+    const [confirmDisconnect, setConfirmDisconnect] = useState<{ open: boolean; provider?: string }>({ open: false });
   const [branding, setBranding] = useState({
     company_name: '',
     address: '',
@@ -80,6 +80,10 @@ export function Settings() {
         { key: 'webhook_secret', label: 'Webhook Secret', type: 'password' },
         { key: 'test_to_number', label: 'Test To Number (+... )' },
       ],
+    },
+    openrouter: {
+      name: 'OpenRouter Integration',
+      fields: [{ key: 'token', label: 'API Key', type: 'password' }],
     },
   };
 

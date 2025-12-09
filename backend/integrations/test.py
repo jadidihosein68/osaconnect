@@ -17,6 +17,7 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Content, Email, Mail, To
 from telegram import Bot
 from twilio.rest import Client as TwilioClient
+from openai import OpenAI
 
 from organizations.permissions import IsOrgAdmin
 from organizations.utils import get_current_org
@@ -244,6 +245,15 @@ def _validate_with_provider(provider: str, token: str, extra: dict) -> tuple[boo
                 return (False, f"ElevenLabs status {resp.status_code}: {resp.text[:200]}")
             except Exception as exc:  # noqa: BLE001
                 return (False, f"ElevenLabs test failed: {exc}")
+        if provider == "openrouter":
+            base_url = getattr(settings, "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+            try:
+                client = OpenAI(base_url=base_url, api_key=token)
+                resp = client.models.list()
+                count = len(getattr(resp, "data", []) or [])
+                return (True, f"OpenRouter key valid; models available: {count}")
+            except Exception as exc:  # noqa: BLE001
+                return (False, f"OpenRouter test failed: {exc}")
         return (False, "Unsupported provider")
     except Exception as exc:  # network/JSON errors
         return (False, f"Validation failed: {exc}")

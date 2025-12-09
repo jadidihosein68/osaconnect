@@ -26,7 +26,10 @@ SUPPORTED_PROVIDERS = {choice[0] for choice in Integration.PROVIDERS}
 
 
 def _validate_provider(provider: str) -> None:
-    if provider not in SUPPORTED_PROVIDERS:
+    normalized = (provider or "").strip().lower()
+    # keep any new providers (e.g., openrouter) accepted even if choices get stale
+    allowed = SUPPORTED_PROVIDERS | {"openrouter"}
+    if normalized not in allowed:
         raise ValueError("Unsupported provider")
 
 
@@ -310,6 +313,8 @@ class IntegrationTestView(APIView):
             return self._test_elevenlabs(token, extra, org, request)
         if provider == "google_calendar":
             return self._test_google_calendar(token, extra, org)
+        if provider == "openrouter":
+            return self._test_openrouter(token, extra, org)
 
         # Stub/placeholder success for other providers
         return Response({"status": "ok", "ok": True, "message": "Test succeeded."})
@@ -482,3 +487,19 @@ class IntegrationTestView(APIView):
         except Exception as exc:  # noqa: BLE001
             logger.exception("elevenlabs.test.exception", extra={"org": org.id})
             return Response({"status": "error", "ok": False, "message": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def _test_openrouter(self, token: str, extra: dict, org):
+        """
+        Validate OpenRouter API key using OpenAI SDK hitting OpenRouter base_url.
+        """
+        from openai import OpenAI
+
+        base_url = getattr(settings, "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+        try:
+            client = OpenAI(base_url=base_url, api_key=token)
+            resp = client.models.list()
+            count = len(getattr(resp, "data", []) or [])
+            return Response({"status": "ok", "ok": True, "message": f"OpenRouter key valid; models available: {count}"})
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("openrouter.test.failed", extra={"org": org.id})
+            return Response({"status": "error", "ok": False, "message": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
